@@ -78,9 +78,15 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     @Override
     public void tick() {
+        if (this.pathResult == null) {
+            Bukkit.broadcastMessage("this.pathResult == null");
+            this.blockList.clear();
+            return;
+        }
+
         if (this.pathResult.getNextPoint() != null) {
             Bukkit.broadcastMessage("If");
-            bukkitVillager.getPathfinder().moveTo(this.pathResult);
+            bukkitVillager.getPathfinder().moveTo(this.pathResult, 1F);
         } else {
             Bukkit.broadcastMessage("Else");
             List<Block> radiusBlock = BetterVillagers.getNearbyGrownWheat(bukkitVillager.getLocation(), 1);
