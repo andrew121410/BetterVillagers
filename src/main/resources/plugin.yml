@@ -1,0 +1,5 @@
+name: BetterVillagers
+version: '${project.version}'
+main: com.andrew121410.mc.bettervillagers.BetterVillagers
+api-version: 1.17
+authors: [ Andrew121410 ]
