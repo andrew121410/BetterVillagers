@@ -8,6 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.craftbukkit.v1_17_R1.CraftWorld;
@@ -60,6 +61,11 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     @Override
     public boolean shouldStayActive() {
+        //30 seconds
+        if (pathTicks > 600) {
+            Bukkit.broadcastMessage("Times up; " + this.pathTicks);
+            return false;
+        }
         return !blockList.isEmpty();
     }
 
@@ -70,8 +76,10 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     @Override
     public void stop() {
-        bukkitVillager.getPathfinder().stopPathfinding();
-        coolDownTicks = 100;
+        //20 second delay
+        this.coolDownTicks = 400;
+        this.bukkitVillager.getPathfinder().stopPathfinding();
+        this.pathTicks = 0;
     }
 
     private Pathfinder.PathResult pathResult;
@@ -83,12 +91,11 @@ public class BetterFarmingGoal implements Goal<Villager> {
             this.blockList.clear();
             return;
         }
+        pathTicks++;
 
         if (this.pathResult.getNextPoint() != null) {
-            Bukkit.broadcastMessage("If");
-            bukkitVillager.getPathfinder().moveTo(this.pathResult, 1F);
+            bukkitVillager.getPathfinder().moveTo(this.pathResult, 0.8F);
         } else {
-            Bukkit.broadcastMessage("Else");
             List<Block> radiusBlock = BetterVillagers.getNearbyGrownWheat(bukkitVillager.getLocation(), 1);
             if (!radiusBlock.isEmpty()) {
                 Iterator<Block> iterator = radiusBlock.iterator();
@@ -98,6 +105,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
                     this.serverLevel.setBlock(new BlockPos(wheatBlock.getX(), wheatBlock.getY(), wheatBlock.getZ()), Blocks.WHEAT.defaultBlockState(), 3);
                     iterator.remove();
                 }
+                this.blockList.removeAll(radiusBlock);
             }
             this.blockList.remove(this.targetBlock);
             this.findNewTargetBlockAndSetPath();
@@ -115,7 +123,12 @@ public class BetterFarmingGoal implements Goal<Villager> {
     }
 
     private void findNewTargetBlockAndSetPath() {
-        Optional<Block> blockOptional = this.blockList.stream().findAny();
+        //Sort to get the nearest blocks first!
+        this.blockList.sort(((o1, o2) -> {
+            Location villagerLocation = this.bukkitVillager.getLocation();
+            return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
+        }));
+        Optional<Block> blockOptional = this.blockList.stream().findFirst();
         if (blockOptional.isPresent()) {
             Block block = blockOptional.get();
             this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
