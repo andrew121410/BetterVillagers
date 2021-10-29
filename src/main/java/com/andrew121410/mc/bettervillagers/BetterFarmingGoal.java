@@ -1,5 +1,7 @@
 package com.andrew121410.mc.bettervillagers;
 
+import com.andrew121410.mc.world16utils.World16Utils;
+import com.andrew121410.mc.world16utils.blocks.MarkerColor;
 import com.destroystokyo.paper.entity.Pathfinder;
 import com.destroystokyo.paper.entity.ai.Goal;
 import com.destroystokyo.paper.entity.ai.GoalKey;
@@ -47,6 +49,8 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     @Override
     public boolean shouldActivate() {
+        if (!this.bukkitVillager.getWorld().isDayTime()) return false;
+
         if (coolDownTicks > 0) {
             --coolDownTicks;
             return false;
@@ -80,6 +84,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
         this.coolDownTicks = 400;
         this.bukkitVillager.getPathfinder().stopPathfinding();
         this.pathTicks = 0;
+        World16Utils.getInstance().getClassWrappers().getPackets().sendDebugGameTestClearPacket(this.bukkitVillager.getWorld()); //DEBUG
     }
 
     private Pathfinder.PathResult pathResult;
@@ -123,6 +128,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
     }
 
     private void findNewTargetBlockAndSetPath() {
+        World16Utils.getInstance().getClassWrappers().getPackets().sendDebugGameTestClearPacket(this.bukkitVillager.getWorld()); //DEBUG
         //Sort to get the nearest blocks first!
         this.blockList.sort(((o1, o2) -> {
             Location villagerLocation = this.bukkitVillager.getLocation();
@@ -133,6 +139,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
             Block block = blockOptional.get();
             this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
             this.targetBlock = block;
+            World16Utils.getInstance().getClassWrappers().getPackets().sendDebugCreateMarkerPacket(this.bukkitVillager.getWorld(), block.getLocation(), MarkerColor.GREEN, "TargetBlock"); //DEBUG
         }
     }
 }
