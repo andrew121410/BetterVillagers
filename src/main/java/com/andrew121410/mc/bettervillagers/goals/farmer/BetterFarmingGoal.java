@@ -14,16 +14,21 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.Ageable;
 import org.bukkit.craftbukkit.v1_17_R1.CraftWorld;
 import org.bukkit.craftbukkit.v1_17_R1.entity.CraftVillager;
 import org.bukkit.entity.Villager;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class BetterFarmingGoal implements Goal<Villager> {
+
+    private final static List<Location> currentlyTargetedBlocks = new ArrayList<>();
 
     private BetterVillagers plugin;
 
@@ -111,6 +116,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 }
                 this.blockList.removeAll(radiusBlock);
             }
+            currentlyTargetedBlocks.remove(this.targetBlock.getLocation());
             this.blockList.remove(this.targetBlock);
             this.findNewTargetBlockAndSetPath();
         }
@@ -128,14 +134,27 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     private void findNewTargetBlockAndSetPath() {
         World16Utils.getInstance().getClassWrappers().getPackets().sendDebugGameTestClearPacket(this.bukkitVillager.getWorld()); //DEBUG
+
         //Sort to get the nearest blocks first!
         this.blockList.sort(((o1, o2) -> {
             Location villagerLocation = this.bukkitVillager.getLocation();
             return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
         }));
+
+        //Update the blockList because we don't want to target already targeted blocks by other farmer villagers
+        this.blockList = this.blockList.stream().filter(block -> !currentlyTargetedBlocks.contains(block.getLocation())).collect(Collectors.toList());
+
+        //Update the blockList because we don't want to target blocks that could already been harvested
+        this.blockList = this.blockList.stream().filter(block -> {
+            if (!(block.getBlockData() instanceof Ageable)) return false;
+            Ageable ageable = (Ageable) block.getBlockData();
+            return ageable.getAge() == ageable.getMaximumAge();
+        }).collect(Collectors.toList());
+
         Optional<Block> blockOptional = this.blockList.stream().findFirst();
         if (blockOptional.isPresent()) {
             Block block = blockOptional.get();
+            currentlyTargetedBlocks.add(block.getLocation());
             this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
             this.targetBlock = block;
             World16Utils.getInstance().getClassWrappers().getPackets().sendDebugCreateMarkerPacket(this.bukkitVillager.getWorld(), block.getLocation(), MarkerColor.GREEN, "TargetBlock"); //DEBUG
