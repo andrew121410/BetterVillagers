@@ -101,6 +101,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
         if (this.pathResult == null) {
             Bukkit.broadcastMessage("this.pathResult is null..."); //DEBUG
             this.blockList.clear();
+            if (this.targetBlock != null) currentlyTargetedBlocks.remove(this.targetBlock.getLocation());
             return;
         }
         ticks++;
