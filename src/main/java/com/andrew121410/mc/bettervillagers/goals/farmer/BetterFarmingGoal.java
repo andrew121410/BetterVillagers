@@ -38,11 +38,18 @@ public class BetterFarmingGoal implements Goal<Villager> {
     private int coolDownTicks;
     private int ticks;
 
+    //If still going after 30 seconds then just stop it
+    private int maximumTicks = 600;
+    //After 400 ticks you can run again
+    private int coolDownTimeTicks = 400;
+
     private final net.minecraft.world.entity.npc.Villager minecraftVillager;
     private final ServerLevel serverLevel;
 
     private List<Block> blockList;
     private Block targetBlock;
+
+    private Pathfinder.PathResult pathResult;
 
     public BetterFarmingGoal(BetterVillagers plugin, Villager villager) {
         this.plugin = plugin;
@@ -70,8 +77,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     @Override
     public boolean shouldStayActive() {
-        //30 seconds
-        if (ticks > 600) {
+        if (this.ticks > this.maximumTicks) {
             Bukkit.broadcastMessage("Times up; " + this.ticks); //DEBUG
             return false;
         }
@@ -86,22 +92,19 @@ public class BetterFarmingGoal implements Goal<Villager> {
     @Override
     public void stop() {
         Bukkit.broadcastMessage("stop()"); //DEBUG
-        //20 second delay
-        this.coolDownTicks = 400;
+        this.coolDownTicks = this.coolDownTimeTicks;
         this.bukkitVillager.getPathfinder().stopPathfinding();
         this.ticks = 0;
         World16Utils.getInstance().getClassWrappers().getPackets().sendDebugGameTestClearPacket(this.bukkitVillager.getWorld()); //DEBUG
     }
-
-    private Pathfinder.PathResult pathResult;
 
     @Override
     public void tick() {
         //Sometimes pathResult is null, because a path couldn't be calculated
         if (this.pathResult == null) {
             Bukkit.broadcastMessage("this.pathResult is null..."); //DEBUG
-            this.blockList.clear();
             if (this.targetBlock != null) currentlyTargetedBlocks.remove(this.targetBlock.getLocation());
+            this.blockList.clear();
             return;
         }
         ticks++;
@@ -135,6 +138,8 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     private void findNewTargetBlockAndSetPath() {
         World16Utils.getInstance().getClassWrappers().getPackets().sendDebugGameTestClearPacket(this.bukkitVillager.getWorld()); //DEBUG
+
+        if (this.blockList.isEmpty()) return;
 
         //Sort to get the nearest blocks first!
         this.blockList.sort(((o1, o2) -> {
