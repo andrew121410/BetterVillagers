@@ -1,5 +1,6 @@
-package com.andrew121410.mc.bettervillagers;
+package com.andrew121410.mc.bettervillagers.goals.farmer;
 
+import com.andrew121410.mc.bettervillagers.BetterVillagers;
 import com.andrew121410.mc.world16utils.World16Utils;
 import com.andrew121410.mc.world16utils.blocks.MarkerColor;
 import com.destroystokyo.paper.entity.Pathfinder;
@@ -19,7 +20,6 @@ import org.bukkit.entity.Villager;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.EnumSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,7 +31,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
     private final Villager bukkitVillager;
 
     private int coolDownTicks;
-    private int pathTicks;
+    private int ticks;
 
     private final net.minecraft.world.entity.npc.Villager minecraftVillager;
     private final ServerLevel serverLevel;
@@ -57,7 +57,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
         }
         this.blockList = BetterVillagers.getNearbyGrownWheat(bukkitVillager.getLocation(), 20);
         if (!blockList.isEmpty()) {
-            Bukkit.broadcastMessage("ShouldActivate = true 2");
+            Bukkit.broadcastMessage("ShouldActivate = true"); //DEBUG
             return true;
         }
         return false;
@@ -66,8 +66,8 @@ public class BetterFarmingGoal implements Goal<Villager> {
     @Override
     public boolean shouldStayActive() {
         //30 seconds
-        if (pathTicks > 600) {
-            Bukkit.broadcastMessage("Times up; " + this.pathTicks);
+        if (ticks > 600) {
+            Bukkit.broadcastMessage("Times up; " + this.ticks); //DEBUG
             return false;
         }
         return !blockList.isEmpty();
@@ -80,10 +80,11 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     @Override
     public void stop() {
+        Bukkit.broadcastMessage("stop()"); //DEBUG
         //20 second delay
         this.coolDownTicks = 400;
         this.bukkitVillager.getPathfinder().stopPathfinding();
-        this.pathTicks = 0;
+        this.ticks = 0;
         World16Utils.getInstance().getClassWrappers().getPackets().sendDebugGameTestClearPacket(this.bukkitVillager.getWorld()); //DEBUG
     }
 
@@ -91,28 +92,25 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     @Override
     public void tick() {
+        //Sometimes pathResult is null, because a path couldn't be calculated
         if (this.pathResult == null) {
-            Bukkit.broadcastMessage("this.pathResult == null");
+            Bukkit.broadcastMessage("this.pathResult is null..."); //DEBUG
             this.blockList.clear();
             return;
         }
-        pathTicks++;
+        ticks++;
 
         if (this.pathResult.getNextPoint() != null) {
             bukkitVillager.getPathfinder().moveTo(this.pathResult, 0.8F);
         } else {
             List<Block> radiusBlock = BetterVillagers.getNearbyGrownWheat(bukkitVillager.getLocation(), 1);
             if (!radiusBlock.isEmpty()) {
-                Iterator<Block> iterator = radiusBlock.iterator();
-                while (iterator.hasNext()) {
-                    Block wheatBlock = iterator.next();
+                for (Block wheatBlock : radiusBlock) {
                     this.serverLevel.destroyBlock(new BlockPos(wheatBlock.getX(), wheatBlock.getY(), wheatBlock.getZ()), true, minecraftVillager);
                     this.serverLevel.setBlock(new BlockPos(wheatBlock.getX(), wheatBlock.getY(), wheatBlock.getZ()), Blocks.WHEAT.defaultBlockState(), 3);
-                    iterator.remove();
                 }
                 this.blockList.removeAll(radiusBlock);
             }
-            this.blockList.remove(this.targetBlock);
             this.findNewTargetBlockAndSetPath();
         }
     }
@@ -124,7 +122,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     @Override
     public @NotNull EnumSet<GoalType> getTypes() {
-        return EnumSet.of(GoalType.MOVE, GoalType.LOOK);
+        return EnumSet.of(GoalType.MOVE, GoalType.TARGET, GoalType.LOOK);
     }
 
     private void findNewTargetBlockAndSetPath() {
