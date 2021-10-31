@@ -111,6 +111,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 }
                 this.blockList.removeAll(radiusBlock);
             }
+            this.blockList.remove(this.targetBlock);
             this.findNewTargetBlockAndSetPath();
         }
     }
