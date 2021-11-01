@@ -34,8 +34,8 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     //If still going after 30 seconds then just stop it; in ticks
     private int maximumTicks = 600;
-    //After 2 minutes you can run again; in ticks
-    private int coolDownTimeTicks = 2400;
+    //After 1 minute you can run again; in ticks
+    private int coolDownTimeTicks = 1200;
 
     private final net.minecraft.world.entity.npc.Villager minecraftVillager;
     private final ServerLevel serverLevel;
@@ -64,7 +64,10 @@ public class BetterFarmingGoal implements Goal<Villager> {
             return false;
         }
         this.blockList = BetterVillagers.getNearbyGrownWheat(bukkitVillager.getLocation(), 20);
-        return !blockList.isEmpty();
+        if (blockList.isEmpty()) {
+            this.coolDownTicks = this.coolDownTimeTicks;
+            return false;
+        } else return true;
     }
 
     @Override
