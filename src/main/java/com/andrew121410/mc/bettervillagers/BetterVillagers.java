@@ -1,5 +1,6 @@
 package com.andrew121410.mc.bettervillagers;
 
+import com.andrew121410.mc.bettervillagers.listeners.OnEntityDeathEvent;
 import com.andrew121410.mc.bettervillagers.listeners.OnVillagerCareerChangeEvent;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -20,6 +21,7 @@ public final class BetterVillagers extends JavaPlugin {
 
     private void registerListeners() {
         new OnVillagerCareerChangeEvent(this);
+        new OnEntityDeathEvent(this);
     }
 
     @Override

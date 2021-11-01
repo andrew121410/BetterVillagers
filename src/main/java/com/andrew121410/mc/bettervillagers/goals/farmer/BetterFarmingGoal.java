@@ -20,15 +20,12 @@ import org.bukkit.craftbukkit.v1_17_R1.entity.CraftVillager;
 import org.bukkit.entity.Villager;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class BetterFarmingGoal implements Goal<Villager> {
 
-    private final static List<Location> currentlyTargetedBlocks = new ArrayList<>();
+    public final static Map<UUID, List<Location>> currentlyTargetedBlocks = new HashMap<>();
 
     private BetterVillagers plugin;
 
@@ -57,6 +54,8 @@ public class BetterFarmingGoal implements Goal<Villager> {
         this.bukkitVillager = villager;
         this.serverLevel = ((CraftWorld) bukkitVillager.getWorld()).getHandle();
         this.minecraftVillager = ((CraftVillager) bukkitVillager).getHandle();
+
+        currentlyTargetedBlocks.put(this.bukkitVillager.getUniqueId(), new ArrayList<>());
     }
 
     @Override
@@ -93,6 +92,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
     public void stop() {
         Bukkit.broadcastMessage("stop()"); //DEBUG
         this.coolDownTicks = this.coolDownTimeTicks;
+        this.getCurrentlyTargetedBlocksList().clear();
         this.bukkitVillager.getPathfinder().stopPathfinding();
         this.ticks = 0;
         World16Utils.getInstance().getClassWrappers().getPackets().sendDebugGameTestClearPacket(this.bukkitVillager.getWorld()); //DEBUG
@@ -103,7 +103,6 @@ public class BetterFarmingGoal implements Goal<Villager> {
         //Sometimes pathResult is null, because a path couldn't be calculated
         if (this.pathResult == null) {
             Bukkit.broadcastMessage("this.pathResult is null..."); //DEBUG
-            if (this.targetBlock != null) currentlyTargetedBlocks.remove(this.targetBlock.getLocation());
             this.blockList.clear();
             return;
         }
@@ -120,7 +119,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 }
                 this.blockList.removeAll(radiusBlock);
             }
-            currentlyTargetedBlocks.remove(this.targetBlock.getLocation());
+            this.getCurrentlyTargetedBlocksList().remove(this.targetBlock.getLocation());
             this.blockList.remove(this.targetBlock);
             this.findNewTargetBlockAndSetPath();
         }
@@ -148,7 +147,9 @@ public class BetterFarmingGoal implements Goal<Villager> {
         }));
 
         //Update the blockList because we don't want to target already targeted blocks by other farmer villagers
-        this.blockList = this.blockList.stream().filter(block -> !currentlyTargetedBlocks.contains(block.getLocation())).collect(Collectors.toList());
+        List<Location> locationList = new ArrayList<>();
+        currentlyTargetedBlocks.forEach((uuid, locations) -> locationList.addAll(locations));
+        this.blockList = this.blockList.stream().filter(block -> !locationList.contains(block.getLocation())).collect(Collectors.toList());
 
         //Update the blockList because we don't want to target blocks that could already been harvested
         this.blockList = this.blockList.stream().filter(block -> {
@@ -160,10 +161,14 @@ public class BetterFarmingGoal implements Goal<Villager> {
         Optional<Block> blockOptional = this.blockList.stream().findFirst();
         if (blockOptional.isPresent()) {
             Block block = blockOptional.get();
-            currentlyTargetedBlocks.add(block.getLocation());
+            this.getCurrentlyTargetedBlocksList().add(block.getLocation());
             this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
             this.targetBlock = block;
             World16Utils.getInstance().getClassWrappers().getPackets().sendDebugCreateMarkerPacket(this.bukkitVillager.getWorld(), block.getLocation(), MarkerColor.GREEN, "TargetBlock"); //DEBUG
         }
+    }
+
+    private List<Location> getCurrentlyTargetedBlocksList() {
+        return currentlyTargetedBlocks.get(this.bukkitVillager.getUniqueId());
     }
 }
