@@ -1,8 +1,6 @@
 package com.andrew121410.mc.bettervillagers.goals.farmer;
 
 import com.andrew121410.mc.bettervillagers.BetterVillagers;
-import com.andrew121410.mc.world16utils.World16Utils;
-import com.andrew121410.mc.world16utils.blocks.MarkerColor;
 import com.destroystokyo.paper.entity.Pathfinder;
 import com.destroystokyo.paper.entity.ai.Goal;
 import com.destroystokyo.paper.entity.ai.GoalKey;
@@ -10,7 +8,6 @@ import com.destroystokyo.paper.entity.ai.GoalType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
@@ -35,10 +32,10 @@ public class BetterFarmingGoal implements Goal<Villager> {
     private int coolDownTicks;
     private int ticks;
 
-    //If still going after 30 seconds then just stop it
+    //If still going after 30 seconds then just stop it; in ticks
     private int maximumTicks = 600;
-    //After 400 ticks you can run again
-    private int coolDownTimeTicks = 400;
+    //After 2 minutes you can run again; in ticks
+    private int coolDownTimeTicks = 2400;
 
     private final net.minecraft.world.entity.npc.Villager minecraftVillager;
     private final ServerLevel serverLevel;
@@ -67,19 +64,12 @@ public class BetterFarmingGoal implements Goal<Villager> {
             return false;
         }
         this.blockList = BetterVillagers.getNearbyGrownWheat(bukkitVillager.getLocation(), 20);
-        if (!blockList.isEmpty()) {
-            Bukkit.broadcastMessage("ShouldActivate = true"); //DEBUG
-            return true;
-        }
-        return false;
+        return !blockList.isEmpty();
     }
 
     @Override
     public boolean shouldStayActive() {
-        if (this.ticks > this.maximumTicks) {
-            Bukkit.broadcastMessage("Times up; " + this.ticks); //DEBUG
-            return false;
-        }
+        if (this.ticks > this.maximumTicks) return false;
         return !blockList.isEmpty();
     }
 
@@ -90,19 +80,16 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     @Override
     public void stop() {
-        Bukkit.broadcastMessage("stop()"); //DEBUG
         this.coolDownTicks = this.coolDownTimeTicks;
         this.getCurrentlyTargetedBlocksList().clear();
         this.bukkitVillager.getPathfinder().stopPathfinding();
         this.ticks = 0;
-        World16Utils.getInstance().getClassWrappers().getPackets().sendDebugGameTestClearPacket(this.bukkitVillager.getWorld()); //DEBUG
     }
 
     @Override
     public void tick() {
         //Sometimes pathResult is null, because a path couldn't be calculated
         if (this.pathResult == null) {
-            Bukkit.broadcastMessage("this.pathResult is null..."); //DEBUG
             this.blockList.clear();
             return;
         }
@@ -136,8 +123,6 @@ public class BetterFarmingGoal implements Goal<Villager> {
     }
 
     private void findNewTargetBlockAndSetPath() {
-        World16Utils.getInstance().getClassWrappers().getPackets().sendDebugGameTestClearPacket(this.bukkitVillager.getWorld()); //DEBUG
-
         if (this.blockList.isEmpty()) return;
 
         //Sort to get the nearest blocks first!
@@ -164,7 +149,6 @@ public class BetterFarmingGoal implements Goal<Villager> {
             this.getCurrentlyTargetedBlocksList().add(block.getLocation());
             this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
             this.targetBlock = block;
-            World16Utils.getInstance().getClassWrappers().getPackets().sendDebugCreateMarkerPacket(this.bukkitVillager.getWorld(), block.getLocation(), MarkerColor.GREEN, "TargetBlock"); //DEBUG
         }
     }
 
