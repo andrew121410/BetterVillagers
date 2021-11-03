@@ -26,6 +26,7 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 public class BetterFarmingGoal implements Goal<Villager> {
@@ -163,7 +164,12 @@ public class BetterFarmingGoal implements Goal<Villager> {
             List<Block> radiusBlock = BetterVillagers.getNearbyGrownWheat(bukkitVillager.getLocation(), 1);
             if (!radiusBlock.isEmpty()) {
                 for (Block wheatBlock : radiusBlock) {
-                    this.serverLevel.destroyBlock(new BlockPos(wheatBlock.getX(), wheatBlock.getY(), wheatBlock.getZ()), true, minecraftVillager);
+                    if (this.needsToUnload) {
+                        List<ItemStack> itemStacks = dropForCrops(wheatBlock.getLocation(), true, 1);
+                        for (ItemStack itemStack : itemStacks) this.bukkitVillager.getInventory().addItem(itemStack);
+                    } else {
+                        this.serverLevel.destroyBlock(new BlockPos(wheatBlock.getX(), wheatBlock.getY(), wheatBlock.getZ()), true, minecraftVillager);
+                    }
                     this.serverLevel.setBlock(new BlockPos(wheatBlock.getX(), wheatBlock.getY(), wheatBlock.getZ()), Blocks.WHEAT.defaultBlockState(), 3);
                 }
                 this.blockList.removeAll(radiusBlock);
@@ -220,5 +226,22 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     private List<Location> getCurrentlyTargetedBlocksList() {
         return currentlyTargetedBlocks.get(this.bukkitVillager.getUniqueId());
+    }
+
+    //https://www.spigotmc.org/threads/issue-with-block-getdrops.168815/
+    public List<ItemStack> dropForCrops(Location location, boolean fullyGrown, int lootingEnchantmentLevel) {
+        List<ItemStack> itemStacks = new ArrayList<>();
+
+        if (fullyGrown) {
+            itemStacks.add(new ItemStack(Material.WHEAT));
+            //do random chance drops for fully grown wheat
+            for (int i = 0; i < 3 + lootingEnchantmentLevel; i++) {
+                //again, if minecraft didn't have its (possible) bugs, this might be Random#nextBoolean instead
+                if (ThreadLocalRandom.current().nextInt(15) <= 7) {
+                    itemStacks.add(new ItemStack(Material.WHEAT_SEEDS));
+                }
+            }
+        } else itemStacks.add(new ItemStack(Material.WHEAT_SEEDS));
+        return itemStacks;
     }
 }
