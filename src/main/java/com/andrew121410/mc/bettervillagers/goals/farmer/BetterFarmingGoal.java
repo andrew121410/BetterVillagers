@@ -8,13 +8,21 @@ import com.destroystokyo.paper.entity.ai.GoalType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.Chest;
+import org.bukkit.block.Sign;
 import org.bukkit.block.data.Ageable;
+import org.bukkit.block.data.Directional;
 import org.bukkit.craftbukkit.v1_17_R1.CraftWorld;
 import org.bukkit.craftbukkit.v1_17_R1.entity.CraftVillager;
 import org.bukkit.entity.Villager;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -45,6 +53,10 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     private Pathfinder.PathResult pathResult;
 
+    private boolean hasChest;
+    private boolean needsToUnload;
+    private Block chestBlock;
+
     public BetterFarmingGoal(BetterVillagers plugin, Villager villager) {
         this.plugin = plugin;
         this.key = GoalKey.of(Villager.class, new NamespacedKey(plugin, "better_farming"));
@@ -73,27 +85,56 @@ public class BetterFarmingGoal implements Goal<Villager> {
     @Override
     public boolean shouldStayActive() {
         if (this.ticks > this.maximumTicks) return false;
-        return !blockList.isEmpty();
+        return !this.blockList.isEmpty() || this.needsToUnload;
     }
 
     @Override
     public void start() {
+        List<Block> potentialChests = BetterVillagers.getNearbyBlocks(this.bukkitVillager.getLocation(), 50).stream().filter(block -> block.getType() == Material.CHEST).collect(Collectors.toList());
+
+        potentialChests = potentialChests.stream().filter(block -> {
+            if (block.getState() instanceof Chest) {
+                Directional directional = (Directional) block.getBlockData();
+                Block inFront = block.getRelative(directional.getFacing());
+                if (inFront.getState() instanceof Sign) {
+                    Sign sign = (Sign) inFront.getState();
+                    return sign.getLine(0).equalsIgnoreCase("BetterFarmer");
+                }
+            }
+            return false;
+        }).collect(Collectors.toList());
+
+        if (potentialChests.isEmpty()) {
+            this.chestBlock = null;
+            this.hasChest = false;
+            this.needsToUnload = false;
+        } else {
+            this.chestBlock = potentialChests.stream().findFirst().get();
+            this.hasChest = true;
+            this.needsToUnload = true;
+        }
+
         this.findNewTargetBlockAndSetPath();
     }
 
     @Override
     public void stop() {
         this.coolDownTicks = this.coolDownTimeTicks;
+        this.runOnce = false;
         this.getCurrentlyTargetedBlocksList().clear();
         this.bukkitVillager.getPathfinder().stopPathfinding();
         this.ticks = 0;
     }
+
+    private boolean runOnce;
 
     @Override
     public void tick() {
         //Sometimes pathResult is null, because a path couldn't be calculated
         if (this.pathResult == null) {
             this.blockList.clear();
+            this.needsToUnload = false;
+            Bukkit.broadcastMessage("this.pathResult == null"); //DEBUG
             return;
         }
         ticks++;
@@ -101,6 +142,24 @@ public class BetterFarmingGoal implements Goal<Villager> {
         if (this.pathResult.getNextPoint() != null) {
             bukkitVillager.getPathfinder().moveTo(this.pathResult, 0.8F);
         } else {
+            if (this.blockList.isEmpty() && this.hasChest && this.needsToUnload && !this.runOnce) {
+                this.runOnce = true;
+                Inventory villagerInventory = this.bukkitVillager.getInventory();
+
+                BlockState blockState = this.chestBlock.getState();
+                if (blockState instanceof Chest) {
+                    Chest chestState = (Chest) blockState;
+                    List<ItemStack> toBeRemoved = new ArrayList<>();
+                    for (ItemStack itemStack : villagerInventory) {
+                        if (itemStack == null) continue;
+                        chestState.getInventory().addItem(itemStack);
+                        toBeRemoved.add(itemStack);
+                    }
+                    for (ItemStack itemStack : toBeRemoved) if (itemStack != null) villagerInventory.remove(itemStack);
+                }
+                this.needsToUnload = false;
+                return;
+            }
             List<Block> radiusBlock = BetterVillagers.getNearbyGrownWheat(bukkitVillager.getLocation(), 1);
             if (!radiusBlock.isEmpty()) {
                 for (Block wheatBlock : radiusBlock) {
@@ -126,7 +185,11 @@ public class BetterFarmingGoal implements Goal<Villager> {
     }
 
     private void findNewTargetBlockAndSetPath() {
-        if (this.blockList.isEmpty()) return;
+        //If done harvesting the wheat plants set the path to the chest.
+        if (this.blockList.isEmpty() && this.hasChest) {
+            this.pathResult = bukkitVillager.getPathfinder().findPath(this.chestBlock.getLocation());
+            return;
+        }
 
         //Sort to get the nearest blocks first!
         this.blockList.sort(((o1, o2) -> {

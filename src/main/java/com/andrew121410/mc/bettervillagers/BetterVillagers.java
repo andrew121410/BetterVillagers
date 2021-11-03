@@ -4,6 +4,7 @@ import com.andrew121410.mc.bettervillagers.listeners.OnEntityDeathEvent;
 import com.andrew121410.mc.bettervillagers.listeners.OnVillagerCareerChangeEvent;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.plugin.java.JavaPlugin;
