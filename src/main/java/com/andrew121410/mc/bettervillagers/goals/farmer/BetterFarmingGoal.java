@@ -166,12 +166,9 @@ public class BetterFarmingGoal implements Goal<Villager> {
             List<Block> radiusBlock = BetterVillagers.getNearbyGrownWheat(bukkitVillager.getLocation(), 1);
             if (!radiusBlock.isEmpty()) {
                 for (Block wheatBlock : radiusBlock) {
-                    if (this.needsToUnload) {
-                        List<ItemStack> itemStacks = dropForCrops(wheatBlock.getLocation(), true, 1);
-                        for (ItemStack itemStack : itemStacks) this.bukkitVillager.getInventory().addItem(itemStack);
-                    } else {
-                        this.serverLevel.destroyBlock(new BlockPos(wheatBlock.getX(), wheatBlock.getY(), wheatBlock.getZ()), true, minecraftVillager);
-                    }
+                    this.serverLevel.destroyBlock(new BlockPos(wheatBlock.getX(), wheatBlock.getY(), wheatBlock.getZ()), false, minecraftVillager);
+                    List<ItemStack> itemStacks = getDropsForWheat(true, 1);
+                    for (ItemStack itemStack : itemStacks) this.bukkitVillager.getInventory().addItem(itemStack);
                     this.serverLevel.setBlock(new BlockPos(wheatBlock.getX(), wheatBlock.getY(), wheatBlock.getZ()), Blocks.WHEAT.defaultBlockState(), 3);
                 }
                 this.blockList.removeAll(radiusBlock);
@@ -193,7 +190,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
     }
 
     private void findNewTargetBlockAndSetPath() {
-        //If done harvesting the wheat plants set the path to the chest.
+        //If done harvesting set the path to the chest.
         if (this.blockList.isEmpty() && this.hasChest) {
             this.pathResult = bukkitVillager.getPathfinder().findPath(this.chestBlock.getLocation());
             return;
@@ -205,15 +202,15 @@ public class BetterFarmingGoal implements Goal<Villager> {
             return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
         }));
 
-        //Update the blockList because we don't want to target already targeted blocks by other farmer villagers
         List<Location> locationList = new ArrayList<>();
         currentlyTargetedBlocks.forEach((uuid, locations) -> locationList.addAll(locations));
-        this.blockList = this.blockList.stream().filter(block -> !locationList.contains(block.getLocation())).collect(Collectors.toList());
-
-        //Update the blockList because we don't want to target blocks that could already been harvested
         this.blockList = this.blockList.stream().filter(block -> {
+            //Don't target already targeted blocks by other farmer villagers
+            if (locationList.contains(block.getLocation())) return false;
+            //Not harvestable
             if (!(block.getBlockData() instanceof Ageable)) return false;
             Ageable ageable = (Ageable) block.getBlockData();
+            //Checks if crop is fully grown again; to make sure it hasn't been harvested already
             return ageable.getAge() == ageable.getMaximumAge();
         }).collect(Collectors.toList());
 
@@ -231,14 +228,12 @@ public class BetterFarmingGoal implements Goal<Villager> {
     }
 
     //https://www.spigotmc.org/threads/issue-with-block-getdrops.168815/
-    public List<ItemStack> dropForCrops(Location location, boolean fullyGrown, int lootingEnchantmentLevel) {
+    public List<ItemStack> getDropsForWheat(boolean fullyGrown, int lootingEnchantmentLevel) {
         List<ItemStack> itemStacks = new ArrayList<>();
 
         if (fullyGrown) {
             itemStacks.add(new ItemStack(Material.WHEAT));
-            //do random chance drops for fully grown wheat
             for (int i = 0; i < 3 + lootingEnchantmentLevel; i++) {
-                //again, if minecraft didn't have its (possible) bugs, this might be Random#nextBoolean instead
                 if (ThreadLocalRandom.current().nextInt(15) <= 7) {
                     itemStacks.add(new ItemStack(Material.WHEAT_SEEDS));
                 }
