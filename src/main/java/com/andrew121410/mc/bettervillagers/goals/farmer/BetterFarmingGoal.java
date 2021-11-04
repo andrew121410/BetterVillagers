@@ -9,7 +9,10 @@ import com.destroystokyo.paper.entity.ai.GoalType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
-import org.bukkit.*;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Chest;
@@ -42,7 +45,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
     //If still going after 30 seconds then just stop it; in ticks
     private int maximumTicks = 600;
     //After 1 minute you can run again; in ticks
-    private int coolDownTimeTicks = 200;
+    private int coolDownTimeTicks = 1200;
 
     private final net.minecraft.world.entity.npc.Villager minecraftVillager;
     private final ServerLevel serverLevel;
@@ -119,13 +122,13 @@ public class BetterFarmingGoal implements Goal<Villager> {
     @Override
     public void stop() {
         this.coolDownTicks = this.coolDownTimeTicks;
-        this.runOnce = false;
+        this.runChestUnloadOnce = false;
         this.getCurrentlyTargetedBlocksList().clear();
         this.bukkitVillager.getPathfinder().stopPathfinding();
         this.ticks = 0;
     }
 
-    private boolean runOnce;
+    private boolean runChestUnloadOnce;
 
     @Override
     public void tick() {
@@ -133,7 +136,6 @@ public class BetterFarmingGoal implements Goal<Villager> {
         if (this.pathResult == null) {
             this.blockList.clear();
             this.needsToUnload = false;
-            Bukkit.broadcastMessage("this.pathResult == null"); //DEBUG
             return;
         }
         ticks++;
@@ -143,8 +145,8 @@ public class BetterFarmingGoal implements Goal<Villager> {
             // We have to call this every tick or else it will go like halfway then do something else
             bukkitVillager.getPathfinder().moveTo(this.pathResult, 0.8F);
         } else {
-            if (this.blockList.isEmpty() && this.hasChest && this.needsToUnload && !this.runOnce) {
-                this.runOnce = true;
+            if (this.blockList.isEmpty() && this.hasChest && this.needsToUnload && !this.runChestUnloadOnce) {
+                this.runChestUnloadOnce = true;
                 Inventory villagerInventory = this.bukkitVillager.getInventory();
 
                 BlockState blockState = this.chestBlock.getState();
