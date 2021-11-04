@@ -5,6 +5,7 @@ import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.VillagerCareerChangeEvent;
+import org.bukkit.scheduler.BukkitRunnable;
 
 public class OnVillagerCareerChangeEvent implements Listener {
 
@@ -17,8 +18,14 @@ public class OnVillagerCareerChangeEvent implements Listener {
 
     @EventHandler
     public void onVillagerCareerChangeEvent(VillagerCareerChangeEvent event) {
+        //If the past profession was nothing then handle the villager
         if (event.getEntity().getProfession() == Villager.Profession.NONE) {
-            this.plugin.handleNewVillager(event.getEntity());
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    plugin.handleNewVillager(event.getEntity());
+                }
+            }.runTaskLater(this.plugin, 20L);
         }
     }
 }
