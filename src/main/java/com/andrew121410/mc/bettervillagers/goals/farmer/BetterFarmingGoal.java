@@ -1,8 +1,6 @@
 package com.andrew121410.mc.bettervillagers.goals.farmer;
 
 import com.andrew121410.mc.bettervillagers.BetterVillagers;
-import com.andrew121410.mc.world16utils.World16Utils;
-import com.andrew121410.mc.world16utils.blocks.MarkerColor;
 import com.andrew121410.mc.world16utils.blocks.UniversalBlockUtils;
 import com.destroystokyo.paper.entity.Pathfinder;
 import com.destroystokyo.paper.entity.ai.Goal;
@@ -44,7 +42,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
     //If still going after 30 seconds then just stop it; in ticks
     private int maximumTicks = 600;
     //After 1 minute you can run again; in ticks
-    private int coolDownTimeTicks = 1200;
+    private int coolDownTimeTicks = 200;
 
     private final net.minecraft.world.entity.npc.Villager minecraftVillager;
     private final ServerLevel serverLevel;
@@ -201,23 +199,18 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 this.needsToUnload = false;
                 return;
             }
-
             Block block = potentialPaths.stream().findFirst().get();
-            World16Utils.getInstance().getClassWrappers().getPackets().sendDebugCreateMarkerPacket(this.bukkitVillager.getWorld(), block.getLocation(), MarkerColor.GREEN, ""); //DEBUG
-
             this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
             return;
         }
 
-        //Sort to get the nearest blocks first!
-        this.blockList.sort(((o1, o2) -> {
-            Location villagerLocation = this.bukkitVillager.getLocation();
-            return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
-        }));
-
         List<Location> locationList = new ArrayList<>();
         currentlyTargetedBlocks.forEach((uuid, locations) -> locationList.addAll(locations));
-        this.blockList = this.blockList.stream().filter(block -> {
+        this.blockList = this.blockList.stream().sorted(((o1, o2) -> {
+            //Sort to get the nearest blocks first!
+            Location villagerLocation = this.bukkitVillager.getLocation();
+            return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
+        })).filter(block -> {
             //Don't target already targeted blocks by other farmer villagers
             if (locationList.contains(block.getLocation())) return false;
             //Not harvestable
@@ -227,12 +220,14 @@ public class BetterFarmingGoal implements Goal<Villager> {
             return ageable.getAge() == ageable.getMaximumAge();
         }).collect(Collectors.toList());
 
-        Optional<Block> blockOptional = this.blockList.stream().findFirst();
-        if (blockOptional.isPresent()) {
-            Block block = blockOptional.get();
+        Optional<Block> optionalTargetBlock = this.blockList.stream().findFirst();
+        if (optionalTargetBlock.isPresent()) {
+            Block block = optionalTargetBlock.get();
             this.getCurrentlyTargetedBlocksList().add(block.getLocation());
             this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
             this.targetBlock = block;
+        } else {
+            this.pathResult = null;
         }
     }
 
