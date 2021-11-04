@@ -9,6 +9,7 @@ import com.destroystokyo.paper.entity.ai.GoalType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -141,6 +142,11 @@ public class BetterFarmingGoal implements Goal<Villager> {
         ticks++;
 
         if (this.pathResult.getNextPoint() != null) {
+            //Look at the target if less than 6 blocks away
+            Location finalPoint = this.pathResult.getFinalPoint();
+            if (finalPoint != null)
+                if (this.bukkitVillager.getLocation().distanceSquared(finalPoint) < 36) //36 is 6 blocks
+                    this.minecraftVillager.getLookControl().setLookAt(new Vec3(finalPoint.getBlockX(), finalPoint.getBlockY(), finalPoint.getBlockZ()));
             //This should actually only be called once. But since we still have the vanilla goals;
             // We have to call this every tick or else it will go like halfway then do something else
             bukkitVillager.getPathfinder().moveTo(this.pathResult, 0.8F);
