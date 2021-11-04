@@ -1,8 +1,8 @@
 package com.andrew121410.mc.bettervillagers.listeners;
 
 import com.andrew121410.mc.bettervillagers.BetterVillagers;
+import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.VillagerCareerChangeEvent;
 
@@ -15,8 +15,10 @@ public class OnVillagerCareerChangeEvent implements Listener {
         this.plugin.getServer().getPluginManager().registerEvents(this, this.plugin);
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
+    @EventHandler
     public void onVillagerCareerChangeEvent(VillagerCareerChangeEvent event) {
-        this.plugin.handleNewVillager(event.getEntity());
+        if (event.getEntity().getProfession() == Villager.Profession.NONE) {
+            this.plugin.handleNewVillager(event.getEntity());
+        }
     }
 }
