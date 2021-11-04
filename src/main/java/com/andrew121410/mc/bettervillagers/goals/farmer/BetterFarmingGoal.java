@@ -1,6 +1,7 @@
 package com.andrew121410.mc.bettervillagers.goals.farmer;
 
 import com.andrew121410.mc.bettervillagers.BetterVillagers;
+import com.andrew121410.mc.world16utils.blocks.UniversalBlockUtils;
 import com.destroystokyo.paper.entity.Pathfinder;
 import com.destroystokyo.paper.entity.ai.Goal;
 import com.destroystokyo.paper.entity.ai.GoalKey;
@@ -76,7 +77,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
             --coolDownTicks;
             return false;
         }
-        this.blockList = BetterVillagers.getNearbyGrownWheat(bukkitVillager.getLocation(), 20);
+        this.blockList = this.plugin.getNearbyGrownWheat(bukkitVillager.getLocation(), 20);
         if (blockList.isEmpty()) {
             this.coolDownTicks = this.coolDownTimeTicks;
             return false;
@@ -91,7 +92,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     @Override
     public void start() {
-        List<Block> potentialChests = BetterVillagers.getNearbyBlocks(this.bukkitVillager.getLocation(), 50).stream().filter(block -> block.getType() == Material.CHEST).collect(Collectors.toList());
+        List<Block> potentialChests = UniversalBlockUtils.getNearbyBlocks(this.bukkitVillager.getLocation(), 50).stream().filter(block -> block.getType() == Material.CHEST).collect(Collectors.toList());
 
         potentialChests = potentialChests.stream().filter(block -> {
             if (block.getState() instanceof Chest) {
@@ -163,7 +164,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 this.needsToUnload = false;
                 return;
             }
-            List<Block> radiusBlock = BetterVillagers.getNearbyGrownWheat(bukkitVillager.getLocation(), 1);
+            List<Block> radiusBlock = this.plugin.getNearbyGrownWheat(bukkitVillager.getLocation(), 1);
             if (!radiusBlock.isEmpty()) {
                 for (Block wheatBlock : radiusBlock) {
                     this.serverLevel.destroyBlock(new BlockPos(wheatBlock.getX(), wheatBlock.getY(), wheatBlock.getZ()), false, minecraftVillager);
