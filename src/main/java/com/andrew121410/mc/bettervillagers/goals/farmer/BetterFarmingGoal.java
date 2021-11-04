@@ -1,6 +1,8 @@
 package com.andrew121410.mc.bettervillagers.goals.farmer;
 
 import com.andrew121410.mc.bettervillagers.BetterVillagers;
+import com.andrew121410.mc.world16utils.World16Utils;
+import com.andrew121410.mc.world16utils.blocks.MarkerColor;
 import com.andrew121410.mc.world16utils.blocks.UniversalBlockUtils;
 import com.destroystokyo.paper.entity.Pathfinder;
 import com.destroystokyo.paper.entity.ai.Goal;
@@ -9,10 +11,7 @@ import com.destroystokyo.paper.entity.ai.GoalType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
+import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Chest;
@@ -193,7 +192,20 @@ public class BetterFarmingGoal implements Goal<Villager> {
     private void findNewTargetBlockAndSetPath() {
         //If done harvesting set the path to the chest.
         if (this.blockList.isEmpty() && this.hasChest) {
-            this.pathResult = bukkitVillager.getPathfinder().findPath(this.chestBlock.getLocation());
+            List<Block> potentialPaths = UniversalBlockUtils.getNearbyBlocks(this.chestBlock.getLocation(), 1, false).stream().filter(block -> !block.isSolid() || Tag.SIGNS.isTagged(block.getType())).sorted(((o1, o2) -> {
+                Location villagerLocation = this.bukkitVillager.getLocation();
+                return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
+            })).collect(Collectors.toList());
+
+            if (potentialPaths.isEmpty()) {
+                this.needsToUnload = false;
+                return;
+            }
+
+            Block block = potentialPaths.stream().findFirst().get();
+            World16Utils.getInstance().getClassWrappers().getPackets().sendDebugCreateMarkerPacket(this.bukkitVillager.getWorld(), block.getLocation(), MarkerColor.GREEN, ""); //DEBUG
+
+            this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
             return;
         }
 
