@@ -105,11 +105,11 @@ public class BetterFarmingGoal implements Goal<Villager> {
             return false;
         }).collect(Collectors.toList());
 
-        if (potentialChests.isEmpty()) {
-            this.chestBlock = null;
-            this.hasChest = false;
-            this.needsToUnload = false;
-        } else {
+        this.chestBlock = null;
+        this.hasChest = false;
+        this.needsToUnload = false;
+
+        if (!potentialChests.isEmpty()) {
             this.chestBlock = potentialChests.stream().findFirst().get();
             this.hasChest = true;
             this.needsToUnload = true;
