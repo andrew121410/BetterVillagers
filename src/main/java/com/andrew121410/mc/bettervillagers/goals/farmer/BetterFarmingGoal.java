@@ -49,7 +49,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
     //If still going after 30 seconds then just stop it; in ticks
     private int maximumTicks = 600;
     //After 1 minute you can run again; in ticks
-    private int coolDownTimeTicks = 200;
+    private int coolDownTimeTicks = 1200;
 
     private final net.minecraft.world.entity.npc.Villager minecraftVillager;
     private final ServerLevel serverLevel;
@@ -218,31 +218,32 @@ public class BetterFarmingGoal implements Goal<Villager> {
     }
 
     private void findNewTargetBlockAndSetPath() {
-        //If done harvesting set the path to the chest.
-        if (this.blockList.isEmpty() && this.chestBlock != null) {
-            List<Block> potentialPaths = UniversalBlockUtils.getNearbyBlocks(this.chestBlock.getLocation(), 1, false).stream().filter(block -> !block.isSolid() || Tag.SIGNS.isTagged(block.getType())).sorted(((o1, o2) -> {
-                Location villagerLocation = this.bukkitVillager.getLocation();
-                return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
-            })).collect(Collectors.toList());
+        //If done harvesting set the path to the chest or composter
+        if (this.blockList.isEmpty()) {
+            List<Block> potentialPaths = null;
+
+            if (this.chestBlock != null) {
+                potentialPaths = UniversalBlockUtils.getNearbyBlocks(this.chestBlock.getLocation(), 1, false).stream().filter(block -> !block.isSolid() || Tag.SIGNS.isTagged(block.getType())).sorted(((o1, o2) -> {
+                    Location villagerLocation = this.bukkitVillager.getLocation();
+                    return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
+                })).collect(Collectors.toList());
+            } else if (this.composterBlock != null) {
+                potentialPaths = UniversalBlockUtils.getNearbyBlocks(this.composterBlock.getLocation(), 1, false).stream().filter(block -> !block.isSolid()).sorted(((o1, o2) -> {
+                    Location villagerLocation = this.bukkitVillager.getLocation();
+                    return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
+                })).collect(Collectors.toList());
+            }
+
+            //This shouldn't be ran at all ever. But just in case...
+            if (potentialPaths == null) {
+                this.needsToUnload = false;
+                return;
+            }
 
             if (potentialPaths.isEmpty()) {
                 this.needsToUnload = false;
                 return;
             }
-            Block block = potentialPaths.stream().findFirst().get();
-            this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
-            return;
-        } else if (this.blockList.isEmpty() && this.composterBlock != null) {
-            List<Block> potentialPaths = UniversalBlockUtils.getNearbyBlocks(this.composterBlock.getLocation(), 1, false).stream().filter(block -> !block.isSolid()).sorted(((o1, o2) -> {
-                Location villagerLocation = this.bukkitVillager.getLocation();
-                return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
-            })).collect(Collectors.toList());
-
-            if (potentialPaths.isEmpty()) {
-                this.needsToUnload = false;
-                return;
-            }
-
             Block block = potentialPaths.stream().findFirst().get();
             this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
             return;
