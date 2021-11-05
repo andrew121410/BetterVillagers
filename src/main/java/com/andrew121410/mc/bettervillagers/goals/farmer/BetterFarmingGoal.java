@@ -152,13 +152,13 @@ public class BetterFarmingGoal implements Goal<Villager> {
         ticks++;
 
         if (this.pathResult.getNextPoint() != null) {
-            //Look at the target if less than 6 blocks away
+            //Both setLookAt and moveTo methods should actually only be called once
+            //But since we still have the vanilla goals we have to call this every tick or else it would stop then do something else abruptly
             Location finalPoint = this.pathResult.getFinalPoint();
             if (finalPoint != null)
-                if (this.bukkitVillager.getLocation().distanceSquared(finalPoint) < 36) //36 is 6 blocks
+                //Look at the target if less than 6 blocks away
+                if (this.bukkitVillager.getLocation().distanceSquared(finalPoint) < 36)
                     this.minecraftVillager.getLookControl().setLookAt(new Vec3(finalPoint.getBlockX(), finalPoint.getBlockY(), finalPoint.getBlockZ()));
-            //This should actually only be called once. But since we still have the vanilla goals;
-            // We have to call this every tick or else it will go like halfway then do something else
             bukkitVillager.getPathfinder().moveTo(this.pathResult, 0.8F);
         } else {
             if (this.blockList.isEmpty() && this.needsToUnload) {
