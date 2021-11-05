@@ -36,6 +36,7 @@ import java.util.stream.Collectors;
 
 public class BetterFarmingGoal implements Goal<Villager> {
 
+    //Shared with all farmer villagers that have this goal, so they don't target the same targets as each other
     public final static Map<UUID, List<Location>> currentlyTargetedBlocks = new HashMap<>();
 
     private BetterVillagers plugin;
