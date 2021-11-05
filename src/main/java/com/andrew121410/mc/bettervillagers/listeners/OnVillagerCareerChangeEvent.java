@@ -18,6 +18,11 @@ public class OnVillagerCareerChangeEvent implements Listener {
 
     @EventHandler
     public void onVillagerCareerChangeEvent(VillagerCareerChangeEvent event) {
+        if (event.getProfession() == Villager.Profession.NONE) {
+            this.plugin.removeAllOfOurGoals(event.getEntity());
+            return;
+        }
+
         //If the past profession was nothing then handle the villager
         if (event.getEntity().getProfession() == Villager.Profession.NONE) {
             new BukkitRunnable() {

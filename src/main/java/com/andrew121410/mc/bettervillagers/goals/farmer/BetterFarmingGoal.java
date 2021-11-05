@@ -8,6 +8,7 @@ import com.destroystokyo.paper.entity.ai.GoalKey;
 import com.destroystokyo.paper.entity.ai.GoalType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.ai.behavior.WorkAtComposter;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.Location;
@@ -23,10 +24,12 @@ import org.bukkit.block.data.Directional;
 import org.bukkit.craftbukkit.v1_17_R1.CraftWorld;
 import org.bukkit.craftbukkit.v1_17_R1.entity.CraftVillager;
 import org.bukkit.entity.Villager;
+import org.bukkit.entity.memory.MemoryKey;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
+import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -46,7 +49,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
     //If still going after 30 seconds then just stop it; in ticks
     private int maximumTicks = 600;
     //After 1 minute you can run again; in ticks
-    private int coolDownTimeTicks = 1200;
+    private int coolDownTimeTicks = 200;
 
     private final net.minecraft.world.entity.npc.Villager minecraftVillager;
     private final ServerLevel serverLevel;
@@ -56,9 +59,10 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     private Pathfinder.PathResult pathResult;
 
-    private boolean hasChest;
     private boolean needsToUnload;
+
     private Block chestBlock;
+    private Block composterBlock;
 
     public BetterFarmingGoal(BetterVillagers plugin, Villager villager) {
         this.plugin = plugin;
@@ -108,13 +112,18 @@ public class BetterFarmingGoal implements Goal<Villager> {
         }).collect(Collectors.toList());
 
         this.chestBlock = null;
-        this.hasChest = false;
+        this.composterBlock = null;
         this.needsToUnload = false;
 
         if (!potentialChests.isEmpty()) {
             this.chestBlock = potentialChests.stream().findFirst().get();
-            this.hasChest = true;
             this.needsToUnload = true;
+        } else {
+            Location jobSiteMemory = this.bukkitVillager.getMemory(MemoryKey.JOB_SITE);
+            if (jobSiteMemory != null) {
+                this.composterBlock = jobSiteMemory.getBlock();
+                this.needsToUnload = true;
+            }
         }
 
         this.findNewTargetBlockAndSetPath();
@@ -151,20 +160,33 @@ public class BetterFarmingGoal implements Goal<Villager> {
             // We have to call this every tick or else it will go like halfway then do something else
             bukkitVillager.getPathfinder().moveTo(this.pathResult, 0.8F);
         } else {
-            if (this.blockList.isEmpty() && this.hasChest && this.needsToUnload && !this.runChestUnloadOnce) {
-                this.runChestUnloadOnce = true;
-                Inventory villagerInventory = this.bukkitVillager.getInventory();
+            if (this.blockList.isEmpty() && this.needsToUnload) {
+                if (this.chestBlock != null && !this.runChestUnloadOnce) {
+                    this.runChestUnloadOnce = true;
+                    Inventory villagerInventory = this.bukkitVillager.getInventory();
 
-                BlockState blockState = this.chestBlock.getState();
-                if (blockState instanceof Chest) {
-                    Chest chestState = (Chest) blockState;
-                    List<ItemStack> toBeRemoved = new ArrayList<>();
-                    for (ItemStack itemStack : villagerInventory) {
-                        if (itemStack == null) continue;
-                        chestState.getInventory().addItem(itemStack);
-                        toBeRemoved.add(itemStack);
+                    BlockState blockState = this.chestBlock.getState();
+                    if (blockState instanceof Chest) {
+                        Chest chestState = (Chest) blockState;
+                        List<ItemStack> toBeRemoved = new ArrayList<>();
+                        for (ItemStack itemStack : villagerInventory) {
+                            if (itemStack == null) continue;
+                            chestState.getInventory().addItem(itemStack);
+                            toBeRemoved.add(itemStack);
+                        }
+                        for (ItemStack itemStack : toBeRemoved)
+                            if (itemStack != null) villagerInventory.remove(itemStack);
                     }
-                    for (ItemStack itemStack : toBeRemoved) if (itemStack != null) villagerInventory.remove(itemStack);
+                } else if (this.composterBlock != null) {
+                    WorkAtComposter workAtComposter = new WorkAtComposter();
+                    Method method;
+                    try {
+                        method = WorkAtComposter.class.getDeclaredMethod("doWork", ServerLevel.class, net.minecraft.world.entity.npc.Villager.class);
+                        method.setAccessible(true);
+                        method.invoke(workAtComposter, this.serverLevel, this.minecraftVillager);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
                 this.needsToUnload = false;
                 return;
@@ -197,7 +219,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     private void findNewTargetBlockAndSetPath() {
         //If done harvesting set the path to the chest.
-        if (this.blockList.isEmpty() && this.hasChest) {
+        if (this.blockList.isEmpty() && this.chestBlock != null) {
             List<Block> potentialPaths = UniversalBlockUtils.getNearbyBlocks(this.chestBlock.getLocation(), 1, false).stream().filter(block -> !block.isSolid() || Tag.SIGNS.isTagged(block.getType())).sorted(((o1, o2) -> {
                 Location villagerLocation = this.bukkitVillager.getLocation();
                 return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
@@ -207,6 +229,20 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 this.needsToUnload = false;
                 return;
             }
+            Block block = potentialPaths.stream().findFirst().get();
+            this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
+            return;
+        } else if (this.blockList.isEmpty() && this.composterBlock != null) {
+            List<Block> potentialPaths = UniversalBlockUtils.getNearbyBlocks(this.composterBlock.getLocation(), 1, false).stream().filter(block -> !block.isSolid()).sorted(((o1, o2) -> {
+                Location villagerLocation = this.bukkitVillager.getLocation();
+                return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
+            })).collect(Collectors.toList());
+
+            if (potentialPaths.isEmpty()) {
+                this.needsToUnload = false;
+                return;
+            }
+
             Block block = potentialPaths.stream().findFirst().get();
             this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
             return;

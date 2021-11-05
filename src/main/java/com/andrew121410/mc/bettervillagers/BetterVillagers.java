@@ -36,17 +36,19 @@ public final class BetterVillagers extends JavaPlugin {
         // Plugin shutdown logic
     }
 
+    public void removeAllOfOurGoals(Villager villager) {
+        NamespacedKey betterFarmingKey = NamespacedKey.fromString("better_farming", this);
+        if (betterFarmingKey != null) {
+            Bukkit.getMobGoals().removeGoal(villager, GoalKey.of(Villager.class, betterFarmingKey));
+        }
+    }
+
     public void handleNewVillager(Villager villager) {
         hijackBrain(villager);
     }
 
     private void hijackBrain(Villager bukkitVillager) {
-        NamespacedKey betterFarmingKey = NamespacedKey.fromString("better_farming", this);
-        if (betterFarmingKey != null) {
-            Bukkit.getMobGoals().removeGoal(bukkitVillager, GoalKey.of(Villager.class, betterFarmingKey));
-        } else {
-            Bukkit.broadcastMessage("betterFarmingKey is null");
-        }
+        removeAllOfOurGoals(bukkitVillager);
 
 //        net.minecraft.world.entity.npc.Villager minecraftVillager = ((CraftVillager) bukkitVillager).getHandle();
 //        ServerLevel serverLevel = ((CraftWorld) bukkitVillager.getWorld()).getHandle();
