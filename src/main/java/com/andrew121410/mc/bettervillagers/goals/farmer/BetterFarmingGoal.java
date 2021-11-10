@@ -1,6 +1,8 @@
 package com.andrew121410.mc.bettervillagers.goals.farmer;
 
 import com.andrew121410.mc.bettervillagers.BetterVillagers;
+import com.andrew121410.mc.world16utils.World16Utils;
+import com.andrew121410.mc.world16utils.blocks.MarkerColor;
 import com.andrew121410.mc.world16utils.blocks.UniversalBlockUtils;
 import com.destroystokyo.paper.entity.Pathfinder;
 import com.destroystokyo.paper.entity.ai.Goal;
@@ -9,16 +11,9 @@ import com.destroystokyo.paper.entity.ai.GoalType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.behavior.WorkAtComposter;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
-import org.bukkit.Tag;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockState;
-import org.bukkit.block.Chest;
-import org.bukkit.block.Sign;
+import org.bukkit.*;
+import org.bukkit.block.*;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.Directional;
 import org.bukkit.craftbukkit.v1_17_R1.CraftWorld;
@@ -50,13 +45,13 @@ public class BetterFarmingGoal implements Goal<Villager> {
     //If still going after 30 seconds then just stop it; in ticks
     private int maximumTicks = 600;
     //After 1 minute you can run again; in ticks
-    private int coolDownTimeTicks = 1200;
+    private int coolDownTimeTicks = 100;
 
     private final net.minecraft.world.entity.npc.Villager minecraftVillager;
     private final ServerLevel serverLevel;
 
-    private List<Block> blockList;
-    private Block targetBlock;
+    private List<ToFarmBlock> toFarmBlocks;
+    private ToFarmBlock targetBlock;
 
     private Pathfinder.PathResult pathResult;
 
@@ -83,8 +78,14 @@ public class BetterFarmingGoal implements Goal<Villager> {
             --coolDownTicks;
             return false;
         }
-        this.blockList = this.plugin.getNearbyGrownWheat(bukkitVillager.getLocation(), 20);
-        if (blockList.isEmpty()) {
+        this.toFarmBlocks = getHarvestableToFarmBlocks(bukkitVillager.getLocation(), 20);
+
+        //Debug
+        for (ToFarmBlock toFarmBlock : this.toFarmBlocks) {
+            World16Utils.getInstance().getClassWrappers().getPackets().sendDebugCreateMarkerPacket(this.bukkitVillager.getWorld(), toFarmBlock.getBlock().getLocation(), MarkerColor.GREEN, "");
+        }
+
+        if (toFarmBlocks.isEmpty()) {
             this.coolDownTicks = this.coolDownTimeTicks;
             return false;
         } else return true;
@@ -93,7 +94,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
     @Override
     public boolean shouldStayActive() {
         if (this.ticks > this.maximumTicks) return false;
-        return !this.blockList.isEmpty() || this.needsToUnload;
+        return !this.toFarmBlocks.isEmpty() || this.needsToUnload;
     }
 
     @Override
@@ -104,8 +105,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
             if (block.getState() instanceof Chest) {
                 Directional directional = (Directional) block.getBlockData();
                 Block inFront = block.getRelative(directional.getFacing());
-                if (inFront.getState() instanceof Sign) {
-                    Sign sign = (Sign) inFront.getState();
+                if (inFront.getState() instanceof Sign sign) {
                     return sign.getLine(0).equalsIgnoreCase("BetterFarmer");
                 }
             }
@@ -145,7 +145,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
     public void tick() {
         //Sometimes pathResult is null, because a path couldn't be calculated
         if (this.pathResult == null) {
-            this.blockList.clear();
+            this.toFarmBlocks.clear();
             this.needsToUnload = false;
             return;
         }
@@ -161,14 +161,13 @@ public class BetterFarmingGoal implements Goal<Villager> {
                     this.minecraftVillager.getLookControl().setLookAt(new Vec3(finalPoint.getBlockX(), finalPoint.getBlockY(), finalPoint.getBlockZ()));
             bukkitVillager.getPathfinder().moveTo(this.pathResult, 0.8F);
         } else {
-            if (this.blockList.isEmpty() && this.needsToUnload) {
+            if (this.toFarmBlocks.isEmpty() && this.needsToUnload) {
                 if (this.chestBlock != null && !this.runChestUnloadOnce) {
                     this.runChestUnloadOnce = true;
                     Inventory villagerInventory = this.bukkitVillager.getInventory();
 
                     BlockState blockState = this.chestBlock.getState();
-                    if (blockState instanceof Chest) {
-                        Chest chestState = (Chest) blockState;
+                    if (blockState instanceof Chest chestState) {
                         List<ItemStack> toBeRemoved = new ArrayList<>();
                         for (ItemStack itemStack : villagerInventory) {
                             if (itemStack == null) continue;
@@ -192,18 +191,56 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 this.needsToUnload = false;
                 return;
             }
-            List<Block> radiusBlock = this.plugin.getNearbyGrownWheat(bukkitVillager.getLocation(), 1);
-            if (!radiusBlock.isEmpty()) {
-                for (Block wheatBlock : radiusBlock) {
-                    this.serverLevel.destroyBlock(new BlockPos(wheatBlock.getX(), wheatBlock.getY(), wheatBlock.getZ()), false, minecraftVillager);
-                    List<ItemStack> itemStacks = getDropsForWheat(true, 1);
-                    for (ItemStack itemStack : itemStacks) this.bukkitVillager.getInventory().addItem(itemStack);
-                    this.serverLevel.setBlock(new BlockPos(wheatBlock.getX(), wheatBlock.getY(), wheatBlock.getZ()), Blocks.WHEAT.defaultBlockState(), 3);
+            List<ToFarmBlock> radiusToFarmBlocks = this.toFarmBlocks.stream()
+                    .filter(toFarmBlock -> this.bukkitVillager.getLocation().distanceSquared(toFarmBlock.getBlock().getLocation()) <= 20 && toFarmBlock.getFarmingType() == this.targetBlock.getFarmingType())
+                    .collect(Collectors.toList());
+
+            if (!radiusToFarmBlocks.isEmpty()) {
+                for (ToFarmBlock toFarmBlock : radiusToFarmBlocks) {
+                    Block cropBlock = toFarmBlock.getBlock();
+                    Material material = cropBlock.getType();
+                    List<ItemStack> dropsList = toFarmBlock.getBlockDrops(); //We have to get the drops before block is destroyed
+
+                    boolean needsToSetType = false;
+
+                    if (this.targetBlock.getFarmingType() == FarmingType.DEFAULT || this.targetBlock.getFarmingType() == FarmingType.PUMPKINS_AND_MELONS) {
+                        this.serverLevel.destroyBlock(new BlockPos(cropBlock.getX(), cropBlock.getY(), cropBlock.getZ()), false, minecraftVillager);
+                        needsToSetType = true;
+                    } else if (this.targetBlock.getFarmingType() == FarmingType.SWEET_BERRIES) {
+                        if (cropBlock.getBlockData() instanceof Ageable ageable) {
+                            ageable.setAge(1);
+                            cropBlock.setBlockData(ageable);
+                        }
+                    } else if (this.targetBlock.getFarmingType() == FarmingType.SUGAR_CANE_AND_BAMBOO) {
+                        if (material == Material.SUGAR_CANE) {
+                            Block up = cropBlock.getRelative(BlockFace.UP);
+                            if (up.getType() == Material.SUGAR_CANE) {
+                                up.setType(Material.AIR);
+                            }
+                            cropBlock.setType(Material.AIR);
+                        } else {
+                            List<Block> bambooBlocks = new ArrayList<>();
+                            for (int i = cropBlock.getY(); i <= cropBlock.getWorld().getMaxHeight(); i++) {
+                                Block toCheck = cropBlock.getWorld().getBlockAt(new Location(cropBlock.getWorld(), cropBlock.getX(), i, cropBlock.getZ()));
+                                if (toCheck.getType() == Material.BAMBOO) {
+                                    bambooBlocks.add(toCheck);
+                                } else break;
+                            }
+                            bambooBlocks.sort((o1, o2) -> o2.getY() - o1.getY());
+                            for (Block bambooBlock : bambooBlocks) {
+                                bambooBlock.setType(Material.AIR);
+                            }
+                        }
+                    }
+
+                    for (ItemStack itemStack : dropsList)
+                        this.bukkitVillager.getInventory().addItem(itemStack);
+                    if (needsToSetType) cropBlock.setType(material, false);
                 }
-                this.blockList.removeAll(radiusBlock);
+                this.toFarmBlocks.removeAll(radiusToFarmBlocks);
             }
-            this.getCurrentlyTargetedBlocksList().remove(this.targetBlock.getLocation());
-            this.blockList.remove(this.targetBlock);
+            this.getCurrentlyTargetedBlocksList().remove(this.targetBlock.getBlock().getLocation());
+            this.toFarmBlocks.remove(this.targetBlock);
             this.findNewTargetBlockAndSetPath();
         }
     }
@@ -220,7 +257,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     private void findNewTargetBlockAndSetPath() {
         //If done harvesting set the path to the chest or composter
-        if (this.blockList.isEmpty()) {
+        if (this.toFarmBlocks.isEmpty()) {
             List<Block> potentialPaths = null;
 
             if (this.chestBlock != null) {
@@ -252,26 +289,26 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
         List<Location> locationList = new ArrayList<>();
         currentlyTargetedBlocks.forEach((uuid, locations) -> locationList.addAll(locations));
-        this.blockList = this.blockList.stream().sorted(((o1, o2) -> {
-            //Sort to get the nearest blocks first!
+        this.toFarmBlocks = this.toFarmBlocks.stream().sorted(((o1, o2) -> {
             Location villagerLocation = this.bukkitVillager.getLocation();
-            return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
-        })).filter(block -> {
+            Location one = o1.getBlock().getLocation();
+            Location two = o2.getBlock().getLocation();
+
+            //Sort to get the nearest blocks first!
+            return (int) (one.distanceSquared(villagerLocation) - two.distanceSquared(villagerLocation));
+        })).filter(toFarmBlock -> {
             //Don't target already targeted blocks by other farmer villagers
-            if (locationList.contains(block.getLocation())) return false;
-            //Not harvestable
-            if (!(block.getBlockData() instanceof Ageable)) return false;
-            Ageable ageable = (Ageable) block.getBlockData();
+            if (locationList.contains(toFarmBlock.getBlock().getLocation())) return false;
             //Checks if crop is fully grown again; to make sure it hasn't been harvested already
-            return ageable.getAge() == ageable.getMaximumAge();
+            return toFarmBlock.isGrown();
         }).collect(Collectors.toList());
 
-        Optional<Block> optionalTargetBlock = this.blockList.stream().findFirst();
-        if (optionalTargetBlock.isPresent()) {
-            Block block = optionalTargetBlock.get();
-            this.getCurrentlyTargetedBlocksList().add(block.getLocation());
-            this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
-            this.targetBlock = block;
+        Optional<ToFarmBlock> optionalTargetToFarmBlock = this.toFarmBlocks.stream().findFirst();
+        if (optionalTargetToFarmBlock.isPresent()) {
+            ToFarmBlock toFarmBlock = optionalTargetToFarmBlock.get();
+            this.getCurrentlyTargetedBlocksList().add(toFarmBlock.getBlock().getLocation());
+            this.pathResult = bukkitVillager.getPathfinder().findPath(toFarmBlock.getBlock().getLocation());
+            this.targetBlock = toFarmBlock;
         } else {
             this.pathResult = null;
         }
@@ -281,18 +318,151 @@ public class BetterFarmingGoal implements Goal<Villager> {
         return currentlyTargetedBlocks.get(this.bukkitVillager.getUniqueId());
     }
 
-    //https://www.spigotmc.org/threads/issue-with-block-getdrops.168815/
-    public List<ItemStack> getDropsForWheat(boolean fullyGrown, int lootingEnchantmentLevel) {
-        List<ItemStack> itemStacks = new ArrayList<>();
+    public List<ToFarmBlock> getHarvestableToFarmBlocks(Location location, int radius) {
+        return UniversalBlockUtils.getNearbyBlocks(location, radius).stream()
+                .filter(block -> FarmingType.getFarmingTypeByMaterial(block.getType()) != null)
+                .map(ToFarmBlock::new)
+                .filter(ToFarmBlock::isGrown)
+                .sorted()
+                .collect(Collectors.toList());
+    }
+}
 
-        if (fullyGrown) {
-            itemStacks.add(new ItemStack(Material.WHEAT));
-            for (int i = 0; i < 3 + lootingEnchantmentLevel; i++) {
-                if (ThreadLocalRandom.current().nextInt(15) <= 7) {
-                    itemStacks.add(new ItemStack(Material.WHEAT_SEEDS));
+enum FarmingType {
+    DEFAULT(1), //Wheat, Carrot, Potato, Beetroot
+    SWEET_BERRIES(2),
+    PUMPKINS_AND_MELONS(3),
+    SUGAR_CANE_AND_BAMBOO(4);
+
+    //Weight is used to determine what should be harvested first in accenting order
+    private int weight;
+
+    FarmingType(int weight) {
+        this.weight = weight;
+    }
+
+    public int getWeight() {
+        return weight;
+    }
+
+    public static FarmingType getFarmingTypeByMaterial(Material material) {
+        List<Material> defaultList = Arrays.asList(
+                Material.WHEAT,
+                Material.CARROTS,
+                Material.POTATOES,
+                Material.BEETROOTS
+        );
+        List<Material> pumpkinAndMelon = Arrays.asList(Material.PUMPKIN, Material.MELON);
+        List<Material> sugarCaneAndBamboo = Arrays.asList(Material.BAMBOO, Material.SUGAR_CANE);
+
+        if (defaultList.contains(material)) return DEFAULT;
+        if (material == Material.SWEET_BERRY_BUSH) return SWEET_BERRIES;
+        if (pumpkinAndMelon.contains(material)) return PUMPKINS_AND_MELONS;
+        if (sugarCaneAndBamboo.contains(material)) return SUGAR_CANE_AND_BAMBOO;
+        return null;
+    }
+}
+
+class ToFarmBlock implements Comparable<ToFarmBlock> {
+    private Block block;
+    private FarmingType farmingType;
+
+    public ToFarmBlock(Block block, FarmingType farmingType) {
+        this.block = block;
+
+        if (farmingType == null) {
+            throw new NullPointerException("FarmingType can't be null");
+        }
+        this.farmingType = farmingType;
+    }
+
+    public ToFarmBlock(Block block) {
+        this(block, FarmingType.getFarmingTypeByMaterial(block.getType()));
+    }
+
+    public boolean isGrown() {
+        if (farmingType == FarmingType.DEFAULT || farmingType == FarmingType.SWEET_BERRIES) {
+            if (!(block.getBlockData() instanceof Ageable ageable)) return false;
+            return ageable.getAge() == ageable.getMaximumAge();
+        } else if (farmingType == FarmingType.SUGAR_CANE_AND_BAMBOO) {
+            if (isSugarcaneOrBamboo(this.getBlock().getType())) {
+                if (isSugarcaneOrBamboo(this.block.getRelative(0, -1, 0).getType())) {
+                    return !isSugarcaneOrBamboo(this.block.getRelative(0, -2, 0).getType());
                 }
             }
-        } else itemStacks.add(new ItemStack(Material.WHEAT_SEEDS));
-        return itemStacks;
+            return false;
+        }
+        return this.block.getType() != Material.AIR;
+    }
+
+    public List<ItemStack> getBlockDrops() {
+        //Debug
+        Bukkit.broadcastMessage("Type: " + this.block.getType());
+
+        switch (this.block.getType()) {
+            case WHEAT:
+                //https://www.spigotmc.org/threads/issue-with-block-getdrops.168815/
+                List<ItemStack> itemStacks = new ArrayList<>();
+
+                itemStacks.add(new ItemStack(Material.WHEAT));
+                for (int i = 0; i < 3 + 1; i++) {
+                    if (ThreadLocalRandom.current().nextInt(15) <= 7) {
+                        itemStacks.add(new ItemStack(Material.WHEAT_SEEDS));
+                    }
+                }
+                return itemStacks;
+            case CARROTS:
+                return Collections.singletonList(new ItemStack(Material.CARROT, 3));
+            case POTATOES:
+                return Collections.singletonList(new ItemStack(Material.POTATO, 3));
+            case BEETROOTS:
+                return Arrays.asList(new ItemStack(Material.BEETROOT, 1), new ItemStack(Material.BEETROOT_SEEDS, 2));
+            case SWEET_BERRY_BUSH:
+                return Collections.singletonList(new ItemStack(Material.SWEET_BERRIES, 2));
+            case MELON:
+                return Collections.singletonList(new ItemStack(Material.MELON_SLICE, 4));
+            case PUMPKIN:
+                return Collections.singletonList(new ItemStack(Material.PUMPKIN, 1));
+            case SUGAR_CANE:
+                return Collections.singletonList(new ItemStack(Material.SUGAR_CANE, this.block.getRelative(BlockFace.UP).getType() == Material.SUGAR_CANE ? 2 : 1));
+            case BAMBOO:
+                int count = 0;
+                for (int i = this.block.getLocation().getBlockY(); i <= this.block.getWorld().getMaxHeight(); i++) {
+                    Block toCheck = this.block.getWorld().getBlockAt(new Location(this.block.getWorld(), this.block.getX(), i, this.block.getZ()));
+                    if (toCheck.getType() == Material.BAMBOO) {
+                        count++;
+                    } else break;
+                }
+                return Collections.singletonList(new ItemStack(Material.BAMBOO, count));
+        }
+        return null;
+    }
+
+    public static boolean isSugarcaneOrBamboo(Material type) {
+        return type == Material.SUGAR_CANE || type == Material.BAMBOO;
+    }
+
+    public Block getBlock() {
+        return block;
+    }
+
+    public FarmingType getFarmingType() {
+        return farmingType;
+    }
+
+    @Override
+    public int compareTo(@NotNull ToFarmBlock o) {
+        return this.farmingType.getWeight() - o.farmingType.getWeight();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof ToFarmBlock toFarmBlock)) return false;
+        return this.farmingType == toFarmBlock.farmingType && this.block.equals(toFarmBlock.getBlock());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(block, farmingType);
     }
 }

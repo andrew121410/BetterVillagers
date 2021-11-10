@@ -107,12 +107,4 @@ public final class BetterVillagers extends JavaPlugin {
                 Bukkit.getMobGoals().addGoal(villager, 2, new BetterFarmingGoal(this, villager));
         }
     }
-
-    public List<Block> getNearbyGrownWheat(Location location, int radius) {
-        return UniversalBlockUtils.getNearbyBlocks(location, radius).stream().filter(block -> {
-            if (!(block.getBlockData() instanceof Ageable)) return false;
-            Ageable ageable = (Ageable) block.getBlockData();
-            return block.getType() == Material.WHEAT && ageable.getAge() == ageable.getMaximumAge();
-        }).collect(Collectors.toList());
-    }
 }
