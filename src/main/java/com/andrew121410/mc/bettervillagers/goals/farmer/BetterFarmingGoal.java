@@ -1,8 +1,6 @@
 package com.andrew121410.mc.bettervillagers.goals.farmer;
 
 import com.andrew121410.mc.bettervillagers.BetterVillagers;
-import com.andrew121410.mc.world16utils.World16Utils;
-import com.andrew121410.mc.world16utils.blocks.MarkerColor;
 import com.andrew121410.mc.world16utils.blocks.UniversalBlockUtils;
 import com.destroystokyo.paper.entity.Pathfinder;
 import com.destroystokyo.paper.entity.ai.Goal;
@@ -12,7 +10,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.behavior.WorkAtComposter;
 import net.minecraft.world.phys.Vec3;
-import org.bukkit.*;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Tag;
 import org.bukkit.block.*;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.Directional;
@@ -79,12 +80,6 @@ public class BetterFarmingGoal implements Goal<Villager> {
             return false;
         }
         this.toFarmBlocks = getHarvestableToFarmBlocks(bukkitVillager.getLocation(), 20);
-
-        //Debug
-        for (ToFarmBlock toFarmBlock : this.toFarmBlocks) {
-            World16Utils.getInstance().getClassWrappers().getPackets().sendDebugCreateMarkerPacket(this.bukkitVillager.getWorld(), toFarmBlock.getBlock().getLocation(), MarkerColor.GREEN, "");
-        }
-
         if (toFarmBlocks.isEmpty()) {
             this.coolDownTicks = this.coolDownTimeTicks;
             return false;
@@ -307,7 +302,17 @@ public class BetterFarmingGoal implements Goal<Villager> {
         if (optionalTargetToFarmBlock.isPresent()) {
             ToFarmBlock toFarmBlock = optionalTargetToFarmBlock.get();
             this.getCurrentlyTargetedBlocksList().add(toFarmBlock.getBlock().getLocation());
-            this.pathResult = bukkitVillager.getPathfinder().findPath(toFarmBlock.getBlock().getLocation());
+
+            List<Block> potentialPaths = UniversalBlockUtils.getNearbyBlocks(toFarmBlock.getBlock().getLocation(), 1, false).stream().filter(block -> !block.isSolid()).sorted(((o1, o2) -> {
+                Location villagerLocation = this.bukkitVillager.getLocation();
+                return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
+            })).collect(Collectors.toList());
+
+            Block toGoBlock = toFarmBlock.getBlock();
+            if (!potentialPaths.isEmpty()) {
+                toGoBlock = potentialPaths.stream().findFirst().get();
+            }
+            this.pathResult = bukkitVillager.getPathfinder().findPath(toGoBlock.getLocation());
             this.targetBlock = toFarmBlock;
         } else {
             this.pathResult = null;
@@ -396,9 +401,6 @@ class ToFarmBlock implements Comparable<ToFarmBlock> {
     }
 
     public List<ItemStack> getBlockDrops() {
-        //Debug
-        Bukkit.broadcastMessage("Type: " + this.block.getType());
-
         switch (this.block.getType()) {
             case WHEAT:
                 //https://www.spigotmc.org/threads/issue-with-block-getdrops.168815/
