@@ -286,7 +286,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
             }
             Block block = potentialPaths.stream().findFirst().get();
             this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
-            this.targetBlock = this.composterBlock;
+            this.targetBlock = this.composterBlock != null ? this.composterBlock : this.chestBlock != null ? this.chestBlock : null;
             return;
         }
 
@@ -403,8 +403,17 @@ class ToFarmBlock implements Comparable<ToFarmBlock> {
                 }
             }
             return false;
+        } else if (farmingType == FarmingType.PUMPKINS_AND_MELONS) {
+            List<Block> blockList = UniversalBlockUtils.getNearbyBlocks(this.block.getLocation(), 1, false).stream().filter(possibleStem -> {
+                if (this.block.getType() == Material.PUMPKIN) {
+                    return possibleStem.getType() == Material.PUMPKIN_STEM;
+                } else {
+                    return possibleStem.getType() == Material.MELON_STEM;
+                }
+            }).collect(Collectors.toList());
+            return !blockList.isEmpty();
         }
-        return this.block.getType() != Material.AIR;
+        return false;
     }
 
     public List<ItemStack> getBlockDrops() {
