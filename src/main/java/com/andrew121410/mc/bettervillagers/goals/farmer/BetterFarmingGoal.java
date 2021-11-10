@@ -45,14 +45,16 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
     //If still going after 30 seconds then just stop it; in ticks
     private int maximumTicks = 600;
-    //After 5 minutes you can run again; in ticks
-    private int coolDownTimeTicks = 6000;
+    //After 1 minute you can run again; in ticks
+    private int coolDownTimeTicks = 1200;
 
     private final net.minecraft.world.entity.npc.Villager minecraftVillager;
     private final ServerLevel serverLevel;
 
     private List<ToFarmBlock> toFarmBlocks;
-    private ToFarmBlock targetBlock;
+
+    private Block targetBlock;
+    private ToFarmBlock targetToFarmBlock;
 
     private Pathfinder.PathResult pathResult;
 
@@ -149,12 +151,11 @@ public class BetterFarmingGoal implements Goal<Villager> {
         if (this.pathResult.getNextPoint() != null) {
             //Both setLookAt and moveTo methods should actually only be called once
             //But since we still have the vanilla goals we have to call this every tick or else it would stop then do something else abruptly
-            Location finalPoint = this.pathResult.getFinalPoint();
-            if (finalPoint != null)
-                //Look at the target if less than 6 blocks away
-                if (this.bukkitVillager.getLocation().distanceSquared(finalPoint) < 36)
-                    this.minecraftVillager.getLookControl().setLookAt(new Vec3(finalPoint.getBlockX(), finalPoint.getBlockY(), finalPoint.getBlockZ()));
-            bukkitVillager.getPathfinder().moveTo(this.pathResult, 0.8F);
+            Location toLookAtLocation = this.targetBlock.getLocation();
+            if (this.bukkitVillager.getLocation().distanceSquared(toLookAtLocation) < 36) { //36 is 6 blocks
+                this.minecraftVillager.getLookControl().setLookAt(new Vec3(toLookAtLocation.getBlockX(), toLookAtLocation.getBlockY(), toLookAtLocation.getBlockZ()));
+            }
+            this.bukkitVillager.getPathfinder().moveTo(this.pathResult, 0.8F);
         } else {
             if (this.toFarmBlocks.isEmpty() && this.needsToUnload) {
                 if (this.chestBlock != null && !this.runChestUnloadOnce) {
@@ -187,7 +188,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 return;
             }
             List<ToFarmBlock> radiusToFarmBlocks = this.toFarmBlocks.stream()
-                    .filter(toFarmBlock -> this.bukkitVillager.getLocation().distanceSquared(toFarmBlock.getBlock().getLocation()) <= 20 && toFarmBlock.getFarmingType() == this.targetBlock.getFarmingType())
+                    .filter(toFarmBlock -> this.bukkitVillager.getLocation().distanceSquared(toFarmBlock.getBlock().getLocation()) <= 20 && toFarmBlock.getFarmingType() == this.targetToFarmBlock.getFarmingType())
                     .collect(Collectors.toList());
 
             if (!radiusToFarmBlocks.isEmpty()) {
@@ -197,16 +198,16 @@ public class BetterFarmingGoal implements Goal<Villager> {
                     List<ItemStack> dropsList = toFarmBlock.getBlockDrops(); //We have to get the drops before block is destroyed
 
                     boolean needsToSetType = false;
-                    if (this.targetBlock.getFarmingType() == FarmingType.DEFAULT || this.targetBlock.getFarmingType() == FarmingType.PUMPKINS_AND_MELONS) {
+                    if (this.targetToFarmBlock.getFarmingType() == FarmingType.DEFAULT || this.targetToFarmBlock.getFarmingType() == FarmingType.PUMPKINS_AND_MELONS) {
                         this.serverLevel.destroyBlock(new BlockPos(cropBlock.getX(), cropBlock.getY(), cropBlock.getZ()), false, minecraftVillager);
                         if (!ToFarmBlock.isPumpkinOrMelon(material))
                             needsToSetType = true;
-                    } else if (this.targetBlock.getFarmingType() == FarmingType.SWEET_BERRIES) {
+                    } else if (this.targetToFarmBlock.getFarmingType() == FarmingType.SWEET_BERRIES) {
                         if (cropBlock.getBlockData() instanceof Ageable ageable) {
                             ageable.setAge(1);
                             cropBlock.setBlockData(ageable);
                         }
-                    } else if (this.targetBlock.getFarmingType() == FarmingType.SUGAR_CANE_AND_BAMBOO) {
+                    } else if (this.targetToFarmBlock.getFarmingType() == FarmingType.SUGAR_CANE_AND_BAMBOO) {
                         if (material == Material.SUGAR_CANE) {
                             Block up = cropBlock.getRelative(BlockFace.UP);
                             if (up.getType() == Material.SUGAR_CANE) {
@@ -228,14 +229,20 @@ public class BetterFarmingGoal implements Goal<Villager> {
                         }
                     }
 
-                    for (ItemStack itemStack : dropsList)
-                        this.bukkitVillager.getInventory().addItem(itemStack);
-                    if (needsToSetType) cropBlock.setType(material, false);
+                    if (dropsList != null) {
+                        for (ItemStack itemStack : dropsList) {
+                            this.bukkitVillager.getInventory().addItem(itemStack);
+                        }
+                    }
+
+                    if (needsToSetType) {
+                        cropBlock.setType(material, false);
+                    }
                 }
                 this.toFarmBlocks.removeAll(radiusToFarmBlocks);
             }
-            this.getCurrentlyTargetedBlocksList().remove(this.targetBlock.getBlock().getLocation());
-            this.toFarmBlocks.remove(this.targetBlock);
+            this.getCurrentlyTargetedBlocksList().remove(this.targetToFarmBlock.getBlock().getLocation());
+            this.toFarmBlocks.remove(this.targetToFarmBlock);
             this.findNewTargetBlockAndSetPath();
         }
     }
@@ -279,6 +286,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
             }
             Block block = potentialPaths.stream().findFirst().get();
             this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
+            this.targetBlock = this.composterBlock;
             return;
         }
 
@@ -313,7 +321,8 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 toGoBlock = potentialPaths.stream().findFirst().get();
             }
             this.pathResult = bukkitVillager.getPathfinder().findPath(toGoBlock.getLocation());
-            this.targetBlock = toFarmBlock;
+            this.targetBlock = toFarmBlock.getBlock();
+            this.targetToFarmBlock = toFarmBlock;
         } else {
             this.pathResult = null;
         }
@@ -339,7 +348,7 @@ enum FarmingType {
     PUMPKINS_AND_MELONS(3),
     SUGAR_CANE_AND_BAMBOO(4);
 
-    //Weight is used to determine what should be harvested first in accenting order
+    //Weight is used to determine what should be harvested first in ascending order
     private int weight;
 
     FarmingType(int weight) {
@@ -357,13 +366,11 @@ enum FarmingType {
                 Material.POTATOES,
                 Material.BEETROOTS
         );
-        List<Material> pumpkinAndMelon = Arrays.asList(Material.PUMPKIN, Material.MELON);
-        List<Material> sugarCaneAndBamboo = Arrays.asList(Material.BAMBOO, Material.SUGAR_CANE);
 
         if (defaultList.contains(material)) return DEFAULT;
         if (material == Material.SWEET_BERRY_BUSH) return SWEET_BERRIES;
-        if (pumpkinAndMelon.contains(material)) return PUMPKINS_AND_MELONS;
-        if (sugarCaneAndBamboo.contains(material)) return SUGAR_CANE_AND_BAMBOO;
+        if (material == Material.PUMPKIN || material == Material.MELON) return PUMPKINS_AND_MELONS;
+        if (material == Material.BAMBOO || material == Material.SUGAR_CANE) return SUGAR_CANE_AND_BAMBOO;
         return null;
     }
 }
