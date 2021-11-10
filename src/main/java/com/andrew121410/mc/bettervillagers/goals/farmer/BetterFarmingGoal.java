@@ -406,9 +406,9 @@ class ToFarmBlock implements Comparable<ToFarmBlock> {
         } else if (farmingType == FarmingType.PUMPKINS_AND_MELONS) {
             List<Block> blockList = UniversalBlockUtils.getNearbyBlocks(this.block.getLocation(), 1, false).stream().filter(possibleStem -> {
                 if (this.block.getType() == Material.PUMPKIN) {
-                    return possibleStem.getType() == Material.PUMPKIN_STEM;
+                    return possibleStem.getType() == Material.ATTACHED_PUMPKIN_STEM;
                 } else {
-                    return possibleStem.getType() == Material.MELON_STEM;
+                    return possibleStem.getType() == Material.ATTACHED_MELON_STEM;
                 }
             }).collect(Collectors.toList());
             return !blockList.isEmpty();
