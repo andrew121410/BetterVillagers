@@ -202,10 +202,10 @@ public class BetterFarmingGoal implements Goal<Villager> {
                     List<ItemStack> dropsList = toFarmBlock.getBlockDrops(); //We have to get the drops before block is destroyed
 
                     boolean needsToSetType = false;
-
                     if (this.targetBlock.getFarmingType() == FarmingType.DEFAULT || this.targetBlock.getFarmingType() == FarmingType.PUMPKINS_AND_MELONS) {
                         this.serverLevel.destroyBlock(new BlockPos(cropBlock.getX(), cropBlock.getY(), cropBlock.getZ()), false, minecraftVillager);
-                        needsToSetType = true;
+                        if (!ToFarmBlock.isPumpkinOrMelon(material))
+                            needsToSetType = true;
                     } else if (this.targetBlock.getFarmingType() == FarmingType.SWEET_BERRIES) {
                         if (cropBlock.getBlockData() instanceof Ageable ageable) {
                             ageable.setAge(1);
@@ -440,6 +440,10 @@ class ToFarmBlock implements Comparable<ToFarmBlock> {
 
     public static boolean isSugarcaneOrBamboo(Material type) {
         return type == Material.SUGAR_CANE || type == Material.BAMBOO;
+    }
+
+    public static boolean isPumpkinOrMelon(Material type) {
+        return type == Material.PUMPKIN || type == Material.MELON;
     }
 
     public Block getBlock() {
