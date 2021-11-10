@@ -188,7 +188,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 return;
             }
             List<ToFarmBlock> radiusToFarmBlocks = this.toFarmBlocks.stream()
-                    .filter(toFarmBlock -> this.bukkitVillager.getLocation().distanceSquared(toFarmBlock.getBlock().getLocation()) <= 20 && toFarmBlock.getFarmingType() == this.targetToFarmBlock.getFarmingType())
+                    .filter(toFarmBlock -> this.bukkitVillager.getLocation().distanceSquared(toFarmBlock.getBlock().getLocation()) <= 7 && toFarmBlock.getFarmingType() == this.targetToFarmBlock.getFarmingType())
                     .collect(Collectors.toList());
 
             if (!radiusToFarmBlocks.isEmpty()) {
@@ -292,19 +292,19 @@ public class BetterFarmingGoal implements Goal<Villager> {
 
         List<Location> locationList = new ArrayList<>();
         currentlyTargetedBlocks.forEach((uuid, locations) -> locationList.addAll(locations));
-        this.toFarmBlocks = this.toFarmBlocks.stream().sorted(((o1, o2) -> {
+        this.toFarmBlocks = this.toFarmBlocks.stream().filter(toFarmBlock -> {
+            //Don't target already targeted blocks by other farmer villagers
+            if (locationList.contains(toFarmBlock.getBlock().getLocation())) return false;
+            //Checks if crop is fully grown again; to make sure it hasn't been harvested already
+            return toFarmBlock.isGrown();
+        }).sorted(((o1, o2) -> {
             Location villagerLocation = this.bukkitVillager.getLocation();
             Location one = o1.getBlock().getLocation();
             Location two = o2.getBlock().getLocation();
 
             //Sort to get the nearest blocks first!
             return (int) (one.distanceSquared(villagerLocation) - two.distanceSquared(villagerLocation));
-        })).filter(toFarmBlock -> {
-            //Don't target already targeted blocks by other farmer villagers
-            if (locationList.contains(toFarmBlock.getBlock().getLocation())) return false;
-            //Checks if crop is fully grown again; to make sure it hasn't been harvested already
-            return toFarmBlock.isGrown();
-        }).collect(Collectors.toList());
+        })).collect(Collectors.toList());
 
         Optional<ToFarmBlock> optionalTargetToFarmBlock = this.toFarmBlocks.stream().findFirst();
         if (optionalTargetToFarmBlock.isPresent()) {
@@ -480,7 +480,7 @@ class ToFarmBlock implements Comparable<ToFarmBlock> {
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof ToFarmBlock toFarmBlock)) return false;
-        return this.farmingType == toFarmBlock.farmingType && this.block.equals(toFarmBlock.getBlock());
+        return this.farmingType == toFarmBlock.farmingType && this.block.getLocation().equals(toFarmBlock.getBlock().getLocation());
     }
 
     @Override
