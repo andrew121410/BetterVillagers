@@ -27,6 +27,7 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Method;
+import java.util.Comparator;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
@@ -48,7 +49,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
     //If still going after 30 seconds then just stop it; in ticks
     private int maximumTicks = 600;
     //After 1 minute you can run again; in ticks
-    private int coolDownTimeTicks = 1200;
+    private int coolDownTimeTicks = 200;
 
     private final net.minecraft.world.entity.npc.Villager minecraftVillager;
     private final ServerLevel serverLevel;
@@ -272,18 +273,12 @@ public class BetterFarmingGoal implements Goal<Villager> {
         List<Location> locationList = new ArrayList<>();
         currentlyTargetedBlocks.forEach((uuid, locations) -> locationList.addAll(locations));
         this.toFarmBlocks = this.toFarmBlocks.stream().filter(toFarmBlock -> {
-            //Don't target already targeted blocks by other farmer villagers
-            if (locationList.contains(toFarmBlock.getBlock().getLocation())) return false;
-            //Checks if crop is fully grown again; to make sure it hasn't been harvested already
-            return toFarmBlock.isGrown();
-        }).sorted(((o1, o2) -> {
-            Location villagerLocation = this.bukkitVillager.getLocation();
-            Location one = o1.getBlock().getLocation();
-            Location two = o2.getBlock().getLocation();
-
-            //Sort to get the nearest blocks first!
-            return (int) (one.distanceSquared(villagerLocation) - two.distanceSquared(villagerLocation));
-        })).collect(Collectors.toList());
+                    //Don't target already targeted blocks by other farmer villagers
+                    if (locationList.contains(toFarmBlock.getBlock().getLocation())) return false;
+                    //Checks if crop is fully grown again; to make sure it hasn't been harvested already
+                    return toFarmBlock.isGrown();
+                }).sorted(new DynamicToFarmBlockComparator(this.bukkitVillager.getLocation()))
+                .collect(Collectors.toList());
 
         Optional<ToFarmBlock> optionalTargetToFarmBlock = this.toFarmBlocks.stream().findFirst();
         if (optionalTargetToFarmBlock.isPresent()) {
@@ -322,7 +317,6 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 .filter(block -> FarmingType.getFarmingTypeByMaterial(block.getType()) != null)
                 .map(ToFarmBlock::new)
                 .filter(ToFarmBlock::isGrown)
-                .sorted()
                 .collect(Collectors.toList());
     }
 
@@ -331,11 +325,25 @@ public class BetterFarmingGoal implements Goal<Villager> {
     }
 }
 
+class DynamicToFarmBlockComparator implements Comparator<ToFarmBlock> {
+
+    private Location location;
+
+    public DynamicToFarmBlockComparator(Location location) {
+        this.location = location;
+    }
+
+    @Override
+    public int compare(ToFarmBlock o1, ToFarmBlock o2) {
+        return (o1.getFarmingType().getWeight() - o2.getFarmingType().getWeight()) + (int) (o1.getBlock().getLocation().distanceSquared(this.location) - o2.getBlock().getLocation().distanceSquared(this.location));
+    }
+}
+
 enum FarmingType {
-    DEFAULT(1), //Wheat, Carrot, Potato, Beetroot
-    SWEET_BERRIES(2),
-    PUMPKINS_AND_MELONS(3),
-    SUGAR_CANE_AND_BAMBOO(4);
+    DEFAULT(10), //Wheat, Carrot, Potato, Beetroot
+    SWEET_BERRIES(100),
+    PUMPKINS_AND_MELONS(200),
+    SUGAR_CANE_AND_BAMBOO(300);
 
     //Weight is used to determine what should be harvested first in ascending order
     private int weight;
@@ -364,7 +372,7 @@ enum FarmingType {
     }
 }
 
-class ToFarmBlock implements Comparable<ToFarmBlock> {
+class ToFarmBlock {
     private Block block;
     private FarmingType farmingType;
 
@@ -458,11 +466,6 @@ class ToFarmBlock implements Comparable<ToFarmBlock> {
 
     public FarmingType getFarmingType() {
         return farmingType;
-    }
-
-    @Override
-    public int compareTo(@NotNull ToFarmBlock o) {
-        return this.farmingType.getWeight() - o.farmingType.getWeight();
     }
 
     @Override
