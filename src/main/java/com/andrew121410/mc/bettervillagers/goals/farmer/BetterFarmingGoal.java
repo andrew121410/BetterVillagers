@@ -13,7 +13,6 @@ import net.minecraft.world.phys.Vec3;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.Tag;
 import org.bukkit.block.*;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.Directional;
@@ -28,6 +27,7 @@ import org.jetbrains.annotations.NotNull;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class BetterFarmingGoal implements Goal<Villager> {
@@ -260,33 +260,17 @@ public class BetterFarmingGoal implements Goal<Villager> {
     private void findNewTargetBlockAndSetPath() {
         //If done harvesting set the path to the chest or composter
         if (this.toFarmBlocks.isEmpty()) {
-            List<Block> potentialPaths = null;
+            Block blockOfChestOrComposter = this.chestBlock != null ? this.chestBlock : this.composterBlock != null ? this.composterBlock : null;
 
-            if (this.chestBlock != null) {
-                potentialPaths = UniversalBlockUtils.getNearbyBlocks(this.chestBlock.getLocation(), 1, false).stream().filter(block -> !block.isSolid() || Tag.SIGNS.isTagged(block.getType())).sorted(((o1, o2) -> {
-                    Location villagerLocation = this.bukkitVillager.getLocation();
-                    return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
-                })).collect(Collectors.toList());
-            } else if (this.composterBlock != null) {
-                potentialPaths = UniversalBlockUtils.getNearbyBlocks(this.composterBlock.getLocation(), 1, false).stream().filter(block -> !block.isSolid()).sorted(((o1, o2) -> {
-                    Location villagerLocation = this.bukkitVillager.getLocation();
-                    return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
-                })).collect(Collectors.toList());
-            }
-
-            //This shouldn't be ran at all ever. But just in case...
-            if (potentialPaths == null) {
+            //This shouldn't run at all; but just in case
+            if (blockOfChestOrComposter == null) {
                 this.needsToUnload = false;
                 return;
             }
+            Location locationToPath = findSaferBlockIfPossible(blockOfChestOrComposter, null).getLocation();
 
-            if (potentialPaths.isEmpty()) {
-                this.needsToUnload = false;
-                return;
-            }
-            Block block = potentialPaths.stream().findFirst().get();
-            this.pathResult = bukkitVillager.getPathfinder().findPath(block.getLocation());
-            this.targetBlock = this.composterBlock != null ? this.composterBlock : this.chestBlock != null ? this.chestBlock : null;
+            this.pathResult = bukkitVillager.getPathfinder().findPath(locationToPath);
+            this.targetBlock = blockOfChestOrComposter;
             return;
         }
 
@@ -309,18 +293,12 @@ public class BetterFarmingGoal implements Goal<Villager> {
         Optional<ToFarmBlock> optionalTargetToFarmBlock = this.toFarmBlocks.stream().findFirst();
         if (optionalTargetToFarmBlock.isPresent()) {
             ToFarmBlock toFarmBlock = optionalTargetToFarmBlock.get();
-            this.getCurrentlyTargetedBlocksList().add(toFarmBlock.getBlock().getLocation());
+            //Immediate
+            getCurrentlyTargetedBlocksList().add(toFarmBlock.getBlock().getLocation());
 
-            List<Block> potentialPaths = UniversalBlockUtils.getNearbyBlocks(toFarmBlock.getBlock().getLocation(), 1, false).stream().filter(block -> !block.isSolid()).sorted(((o1, o2) -> {
-                Location villagerLocation = this.bukkitVillager.getLocation();
-                return (int) (o1.getLocation().distanceSquared(villagerLocation) - o2.getLocation().distanceSquared(villagerLocation));
-            })).collect(Collectors.toList());
+            Location locationToPath = findSaferBlockIfPossible(toFarmBlock.getBlock(), null).getLocation();
 
-            Block toGoBlock = toFarmBlock.getBlock();
-            if (!potentialPaths.isEmpty()) {
-                toGoBlock = potentialPaths.stream().findFirst().get();
-            }
-            this.pathResult = bukkitVillager.getPathfinder().findPath(toGoBlock.getLocation());
+            this.pathResult = bukkitVillager.getPathfinder().findPath(locationToPath);
             this.targetBlock = toFarmBlock.getBlock();
             this.targetToFarmBlock = toFarmBlock;
         } else {
@@ -328,8 +306,20 @@ public class BetterFarmingGoal implements Goal<Villager> {
         }
     }
 
-    private List<Location> getCurrentlyTargetedBlocksList() {
-        return currentlyTargetedBlocks.get(this.bukkitVillager.getUniqueId());
+    private Block findSaferBlockIfPossible(Block block, Predicate<Block> predicate) {
+        if (predicate == null) {
+            predicate = predicateBlock -> !predicateBlock.isSolid() || predicateBlock.isCollidable();
+        }
+
+        Block theTargetBlock = block;
+        if (ToFarmBlock.isSugarcaneOrBamboo(theTargetBlock.getType())) {
+            theTargetBlock = theTargetBlock.getRelative(BlockFace.DOWN);
+        }
+
+        return UniversalBlockUtils.getNearbyBlocks(theTargetBlock.getLocation(), 1, false).stream()
+                .filter(predicate)
+                .min((o1, o2) -> (int) (o1.getLocation().distanceSquared(this.bukkitVillager.getLocation()) - o2.getLocation().distanceSquared(this.bukkitVillager.getLocation())))
+                .orElse(block);
     }
 
     public List<ToFarmBlock> getHarvestableToFarmBlocks(Location location, int radius) {
@@ -339,6 +329,10 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 .filter(ToFarmBlock::isGrown)
                 .sorted()
                 .collect(Collectors.toList());
+    }
+
+    private List<Location> getCurrentlyTargetedBlocksList() {
+        return currentlyTargetedBlocks.get(this.bukkitVillager.getUniqueId());
     }
 }
 
