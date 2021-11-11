@@ -49,7 +49,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
     //If still going after 30 seconds then just stop it; in ticks
     private int maximumTicks = 600;
     //After 1 minute you can run again; in ticks
-    private int coolDownTimeTicks = 200;
+    private int coolDownTimeTicks = 1200;
 
     private final net.minecraft.world.entity.npc.Villager minecraftVillager;
     private final ServerLevel serverLevel;
