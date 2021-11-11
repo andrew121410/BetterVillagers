@@ -8,6 +8,8 @@ import com.destroystokyo.paper.entity.ai.GoalKey;
 import com.destroystokyo.paper.entity.ai.GoalType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.ai.behavior.WorkAtComposter;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.Location;
@@ -207,25 +209,18 @@ public class BetterFarmingGoal implements Goal<Villager> {
                             ageable.setAge(1);
                             cropBlock.setBlockData(ageable);
                         }
+                        this.serverLevel.playSound(null, new BlockPos(cropBlock.getX(), cropBlock.getY(), cropBlock.getZ()), SoundEvents.SWEET_BERRY_BUSH_PICK_BERRIES, SoundSource.BLOCKS, 1.0F, 0.8F + this.serverLevel.random.nextFloat() * 0.4F);
                     } else if (this.targetToFarmBlock.getFarmingType() == FarmingType.SUGAR_CANE_AND_BAMBOO) {
-                        if (material == Material.SUGAR_CANE) {
-                            Block up = cropBlock.getRelative(BlockFace.UP);
-                            if (up.getType() == Material.SUGAR_CANE) {
-                                up.setType(Material.AIR);
-                            }
-                            cropBlock.setType(Material.AIR);
-                        } else {
-                            List<Block> bambooBlocks = new ArrayList<>();
-                            for (int i = cropBlock.getY(); i <= cropBlock.getWorld().getMaxHeight(); i++) {
-                                Block toCheck = cropBlock.getWorld().getBlockAt(new Location(cropBlock.getWorld(), cropBlock.getX(), i, cropBlock.getZ()));
-                                if (toCheck.getType() == Material.BAMBOO) {
-                                    bambooBlocks.add(toCheck);
-                                } else break;
-                            }
-                            bambooBlocks.sort((o1, o2) -> o2.getY() - o1.getY());
-                            for (Block bambooBlock : bambooBlocks) {
-                                bambooBlock.setType(Material.AIR);
-                            }
+                        List<Block> sugarcaneOrBambooBlocks = new ArrayList<>();
+                        for (int i = cropBlock.getY(); i <= cropBlock.getWorld().getMaxHeight(); i++) {
+                            Block toCheck = cropBlock.getWorld().getBlockAt(new Location(cropBlock.getWorld(), cropBlock.getX(), i, cropBlock.getZ()));
+                            if (ToFarmBlock.isSugarcaneOrBamboo(toCheck.getType())) {
+                                sugarcaneOrBambooBlocks.add(toCheck);
+                            } else break;
+                        }
+                        sugarcaneOrBambooBlocks.sort((o1, o2) -> o2.getY() - o1.getY());
+                        for (Block bambooBlock : sugarcaneOrBambooBlocks) {
+                            this.serverLevel.destroyBlock(new BlockPos(bambooBlock.getX(), bambooBlock.getY(), bambooBlock.getZ()), false, minecraftVillager);
                         }
                     }
 
@@ -436,16 +431,15 @@ class ToFarmBlock implements Comparable<ToFarmBlock> {
             case PUMPKIN:
                 return Collections.singletonList(new ItemStack(Material.PUMPKIN, 1));
             case SUGAR_CANE:
-                return Collections.singletonList(new ItemStack(Material.SUGAR_CANE, this.block.getRelative(BlockFace.UP).getType() == Material.SUGAR_CANE ? 2 : 1));
             case BAMBOO:
                 int count = 0;
                 for (int i = this.block.getLocation().getBlockY(); i <= this.block.getWorld().getMaxHeight(); i++) {
                     Block toCheck = this.block.getWorld().getBlockAt(new Location(this.block.getWorld(), this.block.getX(), i, this.block.getZ()));
-                    if (toCheck.getType() == Material.BAMBOO) {
+                    if (ToFarmBlock.isSugarcaneOrBamboo(toCheck.getType())) {
                         count++;
                     } else break;
                 }
-                return Collections.singletonList(new ItemStack(Material.BAMBOO, count));
+                return Collections.singletonList(new ItemStack(block.getType(), count));
         }
         return null;
     }
