@@ -10,6 +10,8 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Villager;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.UUID;
+
 public final class BetterVillagers extends JavaPlugin {
 
     @Override
@@ -32,13 +34,6 @@ public final class BetterVillagers extends JavaPlugin {
         hijackBrain(villager);
     }
 
-    public void removeAllOfOurGoals(Villager villager) {
-        NamespacedKey betterFarmingKey = NamespacedKey.fromString("better_farming", this);
-        if (betterFarmingKey != null) {
-            Bukkit.getMobGoals().removeGoal(villager, GoalKey.of(Villager.class, betterFarmingKey));
-        }
-    }
-
     private void hijackBrain(Villager bukkitVillager) {
         removeAllOfOurGoals(bukkitVillager);
         handleCustomGoals(bukkitVillager);
@@ -46,8 +41,19 @@ public final class BetterVillagers extends JavaPlugin {
 
     private void handleCustomGoals(Villager villager) {
         switch (villager.getProfession()) {
-            case FARMER:
-                Bukkit.getMobGoals().addGoal(villager, 2, new BetterFarmingGoal(this, villager));
+            case FARMER -> Bukkit.getMobGoals().addGoal(villager, 2, new BetterFarmingGoal(this, villager));
         }
+    }
+
+    public void removeAllOfOurGoals(Villager villager) {
+        NamespacedKey betterFarmingKey = NamespacedKey.fromString("better_farming", this);
+        if (betterFarmingKey != null) {
+            Bukkit.getMobGoals().removeGoal(villager, GoalKey.of(Villager.class, betterFarmingKey));
+        }
+        removeCustomDataForGoals(villager.getUniqueId());
+    }
+
+    public void removeCustomDataForGoals(UUID uuid) {
+        BetterFarmingGoal.currentlyTargetedBlocks.remove(uuid);
     }
 }

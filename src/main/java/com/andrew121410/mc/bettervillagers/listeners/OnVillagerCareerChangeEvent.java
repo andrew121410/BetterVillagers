@@ -1,11 +1,11 @@
 package com.andrew121410.mc.bettervillagers.listeners;
 
 import com.andrew121410.mc.bettervillagers.BetterVillagers;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.VillagerCareerChangeEvent;
-import org.bukkit.scheduler.BukkitRunnable;
 
 public class OnVillagerCareerChangeEvent implements Listener {
 
@@ -18,19 +18,15 @@ public class OnVillagerCareerChangeEvent implements Listener {
 
     @EventHandler
     public void onVillagerCareerChangeEvent(VillagerCareerChangeEvent event) {
-        if (event.getProfession() == Villager.Profession.NONE) {
+        if (event.getReason() == VillagerCareerChangeEvent.ChangeReason.LOSING_JOB) {
+            Bukkit.broadcastMessage("Villager lost their job.");
             this.plugin.removeAllOfOurGoals(event.getEntity());
             return;
         }
 
         //If the past profession was nothing then handle the villager
         if (event.getEntity().getProfession() == Villager.Profession.NONE) {
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    plugin.handleNewVillager(event.getEntity());
-                }
-            }.runTaskLater(this.plugin, 20L);
+            this.plugin.getServer().getScheduler().runTaskLater(this.plugin, () -> this.plugin.handleNewVillager(event.getEntity()), 20L);
         }
     }
 }

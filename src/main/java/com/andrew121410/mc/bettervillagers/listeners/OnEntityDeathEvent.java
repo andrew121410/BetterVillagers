@@ -1,7 +1,6 @@
 package com.andrew121410.mc.bettervillagers.listeners;
 
 import com.andrew121410.mc.bettervillagers.BetterVillagers;
-import com.andrew121410.mc.bettervillagers.goals.farmer.BetterFarmingGoal;
 import org.bukkit.entity.EntityType;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -19,7 +18,7 @@ public class OnEntityDeathEvent implements Listener {
     @EventHandler
     public void onEntityKilledEvent(EntityDeathEvent event) {
         if (event.getEntity().getType() == EntityType.VILLAGER) {
-            BetterFarmingGoal.currentlyTargetedBlocks.remove(event.getEntity().getUniqueId());
+            this.plugin.removeCustomDataForGoals(event.getEntity().getUniqueId());
         }
     }
 }
