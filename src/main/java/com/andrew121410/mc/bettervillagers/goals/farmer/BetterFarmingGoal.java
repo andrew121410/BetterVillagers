@@ -18,8 +18,8 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.block.*;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.Directional;
-import org.bukkit.craftbukkit.v1_17_R1.CraftWorld;
-import org.bukkit.craftbukkit.v1_17_R1.entity.CraftVillager;
+import org.bukkit.craftbukkit.v1_18_R1.CraftWorld;
+import org.bukkit.craftbukkit.v1_18_R1.entity.CraftVillager;
 import org.bukkit.entity.Villager;
 import org.bukkit.entity.memory.MemoryKey;
 import org.bukkit.inventory.Inventory;
@@ -190,9 +190,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
                 this.needsToUnload = false;
                 return;
             }
-            List<ToFarmBlock> radiusToFarmBlocks = this.toFarmBlocks.stream()
-                    .filter(toFarmBlock -> this.bukkitVillager.getLocation().distanceSquared(toFarmBlock.getBlock().getLocation()) <= 7 && toFarmBlock.getFarmingType() == this.targetToFarmBlock.getFarmingType())
-                    .collect(Collectors.toList());
+            List<ToFarmBlock> radiusToFarmBlocks = this.toFarmBlocks.stream().filter(toFarmBlock -> this.bukkitVillager.getLocation().distanceSquared(toFarmBlock.getBlock().getLocation()) <= 7 && toFarmBlock.getFarmingType() == this.targetToFarmBlock.getFarmingType()).collect(Collectors.toList());
 
             if (!radiusToFarmBlocks.isEmpty()) {
                 for (ToFarmBlock toFarmBlock : radiusToFarmBlocks) {
@@ -203,8 +201,7 @@ public class BetterFarmingGoal implements Goal<Villager> {
                     boolean needsToSetType = false;
                     if (this.targetToFarmBlock.getFarmingType() == FarmingType.DEFAULT || this.targetToFarmBlock.getFarmingType() == FarmingType.PUMPKINS_AND_MELONS) {
                         this.serverLevel.destroyBlock(new BlockPos(cropBlock.getX(), cropBlock.getY(), cropBlock.getZ()), false, minecraftVillager);
-                        if (!ToFarmBlock.isPumpkinOrMelon(material))
-                            needsToSetType = true;
+                        if (!ToFarmBlock.isPumpkinOrMelon(material)) needsToSetType = true;
                     } else if (this.targetToFarmBlock.getFarmingType() == FarmingType.SWEET_BERRIES) {
                         if (cropBlock.getBlockData() instanceof Ageable ageable) {
                             ageable.setAge(1);
@@ -273,12 +270,11 @@ public class BetterFarmingGoal implements Goal<Villager> {
         List<Location> locationList = new ArrayList<>();
         currentlyTargetedBlocks.forEach((uuid, locations) -> locationList.addAll(locations));
         this.toFarmBlocks = this.toFarmBlocks.stream().filter(toFarmBlock -> {
-                    //Don't target already targeted blocks by other farmer villagers
-                    if (locationList.contains(toFarmBlock.getBlock().getLocation())) return false;
-                    //Checks if crop is fully grown again; to make sure it hasn't been harvested already
-                    return toFarmBlock.isGrown();
-                }).sorted(new DynamicToFarmBlockComparator(this.bukkitVillager.getLocation()))
-                .collect(Collectors.toList());
+            //Don't target already targeted blocks by other farmer villagers
+            if (locationList.contains(toFarmBlock.getBlock().getLocation())) return false;
+            //Checks if crop is fully grown again; to make sure it hasn't been harvested already
+            return toFarmBlock.isGrown();
+        }).sorted(new DynamicToFarmBlockComparator(this.bukkitVillager.getLocation())).collect(Collectors.toList());
 
         Optional<ToFarmBlock> optionalTargetToFarmBlock = this.toFarmBlocks.stream().findFirst();
         if (optionalTargetToFarmBlock.isPresent()) {
@@ -306,18 +302,11 @@ public class BetterFarmingGoal implements Goal<Villager> {
             theTargetBlock = theTargetBlock.getRelative(BlockFace.DOWN);
         }
 
-        return UniversalBlockUtils.getNearbyBlocks(theTargetBlock.getLocation(), 1, false).stream()
-                .filter(predicate)
-                .min((o1, o2) -> (int) (o1.getLocation().distanceSquared(this.bukkitVillager.getLocation()) - o2.getLocation().distanceSquared(this.bukkitVillager.getLocation())))
-                .orElse(block);
+        return UniversalBlockUtils.getNearbyBlocks(theTargetBlock.getLocation(), 1, false).stream().filter(predicate).min((o1, o2) -> (int) (o1.getLocation().distanceSquared(this.bukkitVillager.getLocation()) - o2.getLocation().distanceSquared(this.bukkitVillager.getLocation()))).orElse(block);
     }
 
     public List<ToFarmBlock> getHarvestableToFarmBlocks(Location location, int radius) {
-        return UniversalBlockUtils.getNearbyBlocks(location, radius).stream()
-                .filter(block -> FarmingType.getFarmingTypeByMaterial(block.getType()) != null)
-                .map(ToFarmBlock::new)
-                .filter(ToFarmBlock::isGrown)
-                .collect(Collectors.toList());
+        return UniversalBlockUtils.getNearbyBlocks(location, radius).stream().filter(block -> FarmingType.getFarmingTypeByMaterial(block.getType()) != null).map(ToFarmBlock::new).filter(ToFarmBlock::isGrown).collect(Collectors.toList());
     }
 
     private List<Location> getCurrentlyTargetedBlocksList() {
@@ -341,9 +330,7 @@ class DynamicToFarmBlockComparator implements Comparator<ToFarmBlock> {
 
 enum FarmingType {
     DEFAULT(10), //Wheat, Carrot, Potato, Beetroot
-    SWEET_BERRIES(100),
-    PUMPKINS_AND_MELONS(200),
-    SUGAR_CANE_AND_BAMBOO(300);
+    SWEET_BERRIES(100), PUMPKINS_AND_MELONS(200), SUGAR_CANE_AND_BAMBOO(300);
 
     //Weight is used to determine what should be harvested first in ascending order
     private int weight;
@@ -357,12 +344,7 @@ enum FarmingType {
     }
 
     public static FarmingType getFarmingTypeByMaterial(Material material) {
-        List<Material> defaultList = Arrays.asList(
-                Material.WHEAT,
-                Material.CARROTS,
-                Material.POTATOES,
-                Material.BEETROOTS
-        );
+        List<Material> defaultList = Arrays.asList(Material.WHEAT, Material.CARROTS, Material.POTATOES, Material.BEETROOTS);
 
         if (defaultList.contains(material)) return DEFAULT;
         if (material == Material.SWEET_BERRY_BUSH) return SWEET_BERRIES;
@@ -407,7 +389,7 @@ class ToFarmBlock {
                 } else {
                     return possibleStem.getType() == Material.ATTACHED_MELON_STEM;
                 }
-            }).collect(Collectors.toList());
+            }).toList();
             return !blockList.isEmpty();
         }
         return false;
